@@ -60,8 +60,8 @@ data/*.npz
 data/*.npy
 data/*.zip
 
-# Optional: 若你在项目中产生 outputs 或临时文件
-outputs/
+# Optional: 若你在项目中产生临时文件
+# outputs/
 temp/
 
 # Ignore Python egg / compiled files
