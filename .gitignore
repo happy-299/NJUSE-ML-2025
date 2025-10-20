@@ -45,11 +45,11 @@ runs/
 wandb/
 
 # Checkpoints and model weights
-checkpoints/
-*.ckpt
-*.pth
-*.pt
-*.h5
+# checkpoints/
+# *.ckpt
+# *.pth
+# *.pt
+# *.h5
 
 # Data: 忽略常见的大数据文件和目录，但不忽略代码文件（例如 data/get_data.py）
 # - 请把实际数据放在 data/raw/ 或 data/processed/ 或使用其他子目录
@@ -69,3 +69,5 @@ temp/
 *.egg-info/
 
 # Keep this repository-friendly: do not ignore source code directories like `models/` or `utils/`
+
+/engineered

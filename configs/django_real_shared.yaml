@@ -1,0 +1,47 @@
+# 配置：使用Django真实项目数据进行SharedBottom多任务学习
+seed: 42
+
+dataset:
+  # 数据文件路径 - 使用Django项目的真实数据
+  file: ./engineered/django_engineered.xlsx
+  sheet_name: null
+  # 特征列配置：让模型自动检测数值和类别特征
+  numeric_features: []
+  categorical_features: []
+  # 目标列名
+  target_reg: processing_time
+  target_cls: merged
+  # 是否对类别做 one-hot
+  one_hot_categorical: false
+  # 训练/验证/测试比例
+  split:
+    test_size: 0.15
+    val_size: 0.15
+    stratify_by: merged
+
+training:
+  epochs: 30
+  batch_size: 128
+  lr: 0.001
+  weight_decay: 1e-5
+  num_workers: 0
+  patience: 8
+  loss_weights:
+    reg: 1.0
+    cls: 1.0
+
+model:
+  type: shared_bottom  # 使用SharedBottom模型对比
+  embedding_dim: 32
+  bottom_mlp: [256, 128, 64]  # 共享底层网络
+  dropout: 0.2
+  # SharedBottom不需要这些参数，但保留以兼容配置
+  experts: 1
+  expert_hidden: [64]
+  tower_hidden_reg: [128, 64, 32]
+  tower_hidden_cls: [128, 64, 32]
+
+output:
+  dir: ./outputs/django_real_shared
+  save_best: true
+  save_every_epoch: false

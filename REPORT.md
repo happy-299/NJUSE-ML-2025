@@ -1,12 +1,447 @@
-# 多任务学习实验报告（最终版）
+# 多任务学习实验报告
 
-本报告面向“预测 Pull Request 关闭时长（回归）与是否合入（分类）”两大任务，按照实验手册的结构给出：问题与数据、特征、模型与方法、结果与可视化分析、结论与建议。所有实验均可通过提供的 YAML 配置、训练脚本与绘图脚本复现。
+本报告面向“预测 Pull Request 关闭时长（回归）与是否合入（分类）”两大任务，按照实验手册的结构给出：问题与数据、特征、模型与方法、结果与可视化分析、结论与建议。所有实验均可通过提供的 YAML 配置、训练脚本与绘图### 附：复现实验与生成图表
 
-更新日期：2025-10-19
+- 训练 Shared-Bottom：
+  ```powershell
+  python -m src.mtl.train --config configs\django_shared.yaml
+  ```
+- 训练 MMoE：
+  ```powershell
+  python -m src.mtl.train --config configs\django_mmoe.yaml
+  ```
+- 生成图表（基于已有 outputs 目录）：
+  ```powershell
+  python scripts\plot_results.py .\outputs\django_shared .\outputs\django_mmoe --out .\outputs\figures
+  ```
+- 导出训练使用的特征（用于核对"特征列表"）：
+  ```powershell
+  python scripts\dump_meta.py .\outputs\django_shared
+  ```
+
+---
+## level2
+### 6. 特征工程（待补充）
+
+**说明**：本节由负责特征工程的团队成员补充，主要包括：
+- 特征提取方法
+- 特征选择策略
+- 特征变换与归一化
+- 特征重要性分析
+
+（占位符 - 待团队其他成员完成）
 
 ---
 
-## 1. 问题与数据
+### 7. 模型组件消融实验
+
+#### 7.1 实验目的
+
+评估多任务学习模型中各关键组件对最终性能的贡献度，识别哪些组件是必要的，哪些可以简化。
+
+#### 7.2 消融变体设计
+
+基于完整模型（Full Model），设计以下消融变体：
+
+| 变体名称         | 描述             | 修改内容                                 |
+| ---------------- | ---------------- | ---------------------------------------- |
+| **Full**         | 完整模型（基线） | 完整的 Shared-Bottom 或 MMoE 结构        |
+| **No Shared**    | 无共享底层       | 移除共享底层 MLP，每个任务独立建模       |
+| **Single Tower** | 单塔结构         | 回归和分类使用相同的塔结构               |
+| **No Expert**    | 单专家 MMoE      | MMoE 退化为只有 1 个专家（类似共享底层） |
+| **Shallow**      | 浅层网络         | 减少所有隐藏层深度（如 [128,64] → [64]） |
+| **No Dropout**   | 无正则化         | 移除所有 Dropout 层                      |
+
+#### 7.3 实验设置
+
+- **数据集**：Django PR 数据（与 level1 一致）
+- **评估指标**：
+  - 回归：R2、RMSE、MAE
+  - 分类：Accuracy、F1、F1_macro
+- **训练配置**：与完整模型保持一致（batch_size=256, lr=1e-3, epochs=50, early_stopping=5）
+- **随机种子**：42（确保可复现）
+
+#### 7.4 消融实验结果
+
+（待实验运行后填写）
+
+**回归任务性能对比**：
+
+| 变体         | R2 ↑  | RMSE ↓  | MAE ↓  | 相对基线 (R2) |
+| ------------ | ----- | ------- | ------ | ------------- |
+| Full         | 0.619 | 2316.31 | 707.80 | baseline      |
+| No Shared    | -     | -       | -      | -             |
+| Single Tower | -     | -       | -      | -             |
+| No Expert    | -     | -       | -      | -             |
+| Shallow      | -     | -       | -      | -             |
+| No Dropout   | -     | -       | -      | -             |
+
+**分类任务性能对比**：
+
+| 变体         | Accuracy ↑ | F1 ↑  | F1_macro ↑ | 相对基线 (F1) |
+| ------------ | ---------- | ----- | ---------- | ------------- |
+| Full         | 0.696      | 0.588 | 0.674      | baseline      |
+| No Shared    | -          | -     | -          | -             |
+| Single Tower | -          | -     | -          | -             |
+| No Expert    | -          | -     | -          | -             |
+| Shallow      | -          | -     | -          | -             |
+| No Dropout   | -          | -     | -          | -             |
+
+#### 7.5 消融分析
+
+（待结果后补充，示例分析要点）：
+
+1. **共享底层的作用**：
+   - 若 No Shared 性能显著下降 → 共享表示对多任务学习至关重要
+   - 若性能无明显变化 → 两任务相关性较弱，可能需要更独立的建模
+
+2. **专家机制的贡献**（针对 MMoE）：
+   - 若 No Expert 性能接近 Full → 多专家机制未充分利用
+   - 若 No Expert 显著下降 → 多专家能有效捕获任务异质性
+
+3. **网络深度影响**：
+   - Shallow 性能如何权衡效率与表达能力
+
+4. **正则化效果**：
+   - No Dropout 是否过拟合
+
+#### 7.6 复现命令
+
+```powershell
+# 运行完整消融实验（所有变体）
+python experiments\ablation_study.py --config configs\django_mmoe.yaml --output outputs\ablation
+
+# 运行特定变体
+python experiments\ablation_study.py --config configs\django_mmoe.yaml --output outputs\ablation --variants full no_shared shallow
+
+# 可视化消融结果
+python experiments\visualize_experiments.py --ablation outputs\ablation\ablation_summary.json --output outputs\visualizations
+```
+
+---
+
+### 8. 泛化性实验：跨项目预测
+
+#### 8.1 实验目的
+
+评估模型在不同项目间的迁移能力，回答以下问题：
+1. 在项目 A 训练的模型能否泛化到项目 B？
+2. 混合多项目训练是否提升单项目性能？
+3. 哪些特征/模式在跨项目场景下更稳健？
+
+#### 8.2 实验场景设计
+
+| 场景                  | 训练集             | 测试集        | 目的         |
+| --------------------- | ------------------ | ------------- | ------------ |
+| **Within-Project**    | Django (80%)       | Django (20%)  | 项目内基线   |
+| **Cross-Project-A→B** | Django (100%)      | Flask (100%)  | 单向迁移     |
+| **Cross-Project-B→A** | Flask (100%)       | Django (100%) | 反向迁移     |
+| **Mixed-Training**    | Django+Flask (80%) | Django (20%)  | 混合训练评估 |
+
+**说明**：
+- Within-Project 作为性能上界（基线）
+- Cross-Project 评估零样本迁移能力
+- Mixed-Training 评估多源学习效果
+
+#### 8.3 数据切分策略
+
+为防止数据泄漏并反映真实场景：
+
+1. **项目内（Within-Project）**：
+   - 按时间前向切分（推荐）：训练集用早期 PR，测试集用晚期 PR
+   - 或随机分层切分（当前实现）
+
+2. **跨项目（Cross-Project）**：
+   - 训练项目：使用全部数据（或按时间切分留出验证集）
+   - 测试项目：使用全部数据作为测试集，模拟零样本迁移
+   - 注意：需确保特征分布一致性（如类别特征词表统一处理）
+
+3. **混合训练（Mixed-Training）**：
+   - 训练集：合并多项目的训练部分
+   - 验证集：混合或目标项目的验证集
+   - 测试集：目标项目的测试集
+
+#### 8.4 项目选择与特征对齐
+
+**可用项目**（示例）：
+- Django：大型 Web 框架，PR 数量多，变更复杂度高
+- Flask：轻量级 Web 框架，PR 数量中等
+- Requests：HTTP 库，PR 变更相对简单
+
+**特征对齐策略**：
+1. **数值特征**：使用训练集的 StandardScaler 拟合，应用于所有项目
+2. **类别特征**：
+   - 构建统一词表（包含所有项目的类别值）
+   - 对未见类别映射到 `<UNK>` 索引
+3. **项目特定特征**（可选）：
+   - 添加 `project_id` 作为类别特征
+   - 或使用 domain-adaptation 技术（如对抗训练）
+
+#### 8.5 泛化实验结果
+
+（待实验运行后填写）
+
+**回归任务（R2 Score）**：
+
+| 场景           | 训练集       | 测试集 | R2    | RMSE    | 相对基线 |
+| -------------- | ------------ | ------ | ----- | ------- | -------- |
+| Within-Project | Django       | Django | 0.619 | 2316.31 | baseline |
+| Cross-Project  | Django       | Flask  | -     | -       | -        |
+| Cross-Project  | Flask        | Django | -     | -       | -        |
+| Mixed-Training | Django+Flask | Django | -     | -       | -        |
+
+**分类任务（Accuracy & F1）**：
+
+| 场景           | 训练集       | 测试集 | Accuracy | F1    | F1_macro | 相对基线 |
+| -------------- | ------------ | ------ | -------- | ----- | -------- | -------- |
+| Within-Project | Django       | Django | 0.696    | 0.588 | 0.674    | baseline |
+| Cross-Project  | Django       | Flask  | -        | -     | -        | -        |
+| Cross-Project  | Flask        | Django | -        | -     | -        | -        |
+| Mixed-Training | Django+Flask | Django | -        | -     | -        | -        |
+
+#### 8.6 泛化性分析
+
+（待结果后补充，示例分析要点）：
+
+1. **跨项目性能下降幅度**：
+   - 如果下降 > 20% → 项目间差异显著，需 domain-adaptation
+   - 如果下降 < 10% → 模型具备良好泛化能力
+
+2. **特征稳健性**：
+   - 哪些特征在跨项目场景下权重稳定？
+   - 项目特定特征（如 author_experience）是否影响迁移？
+
+3. **混合训练效果**：
+   - 是否存在负迁移（negative transfer）？
+   - 数据增强是否提升单项目性能？
+
+#### 8.7 复现命令
+
+```powershell
+# 项目内基线（Django）
+python experiments\cross_project.py --config configs\django_shared.yaml --output outputs\cross_project --projects django
+
+# 跨项目实验（需要多项目数据）
+python experiments\cross_project.py --config configs\django_shared.yaml --output outputs\cross_project --projects django flask
+
+# 可视化泛化结果
+python experiments\visualize_experiments.py --cross_project outputs\cross_project\generalization_summary.json --output outputs\visualizations
+```
+
+---
+
+### 9. 假设检验：评估算法显著性差异
+
+#### 9.1 检验目的
+
+在比较多个算法（如 Shared-Bottom vs MMoE vs 消融变体）时，需要统计检验评估：
+1. 算法间是否存在**显著差异**（overall test）
+2. 哪些算法对之间**显著不同**（post-hoc pairwise comparison）
+
+#### 9.2 假设检验方法论
+
+基于 **Demšar (2006)** 的推荐方法：
+
+##### 9.2.1 Friedman Test（主检验）
+
+- **适用场景**：多个算法在多个数据集上的非参数比较
+- **原假设 H₀**：所有算法性能无显著差异（秩次相同）
+- **优点**：
+  - 不假设数据分布（非参数）
+  - 适合小样本量
+  - 对异常值稳健
+
+**检验流程**：
+1. 对每个数据集，对 k 个算法的性能排秩（rank）
+2. 计算 Friedman 统计量：
+   ```
+   χ²_F = (12N / k(k+1)) * Σ(R_j² - k(k+1)²/4)
+   ```
+   其中 N 是数据集数，k 是算法数，R_j 是算法 j 的平均秩次
+3. 若 p < α（如 0.05），拒绝 H₀ → 进行 post-hoc 检验
+
+##### 9.2.2 Nemenyi Post-hoc Test
+
+- **触发条件**：Friedman test 显著（p < α）
+- **目的**：成对比较，识别具体哪些算法对显著不同
+- **临界差值（Critical Difference, CD）**：
+  ```
+  CD = q_α * sqrt(k(k+1) / 6N)
+  ```
+  其中 q_α 是 studentized range statistic
+- **判定规则**：若两算法平均秩次差 > CD，则显著不同
+
+**注意**：Nemenyi 相对保守（类似 Tukey HSD），适合对所有算法对进行比较。
+
+##### 9.2.3 替代方案：Kruskal-Wallis + Dunn's Test
+
+- **Kruskal-Wallis**：类似 Friedman，但假设较弱
+- **Dunn's Test**：post-hoc 方法，可配合 Bonferroni 校正
+
+**选择建议**：
+- 默认使用 **Friedman + Nemenyi**（Demšar 推荐）
+- 若数据集数较少（< 5），可改用 **配对 t 检验** 或 **Wilcoxon signed-rank test**
+
+#### 9.3 实验设置
+
+- **算法**：Shared-Bottom, MMoE, 及各消融变体（共 6-8 个）
+- **数据集**：
+  - 理想情况：多个项目数据（Django, Flask, Requests, ...）
+  - 当前情况：单项目多次随机切分（或 k-fold 交叉验证）
+- **指标**：R2（回归）、Accuracy（分类）、F1_macro（分类）
+- **显著性水平**：α = 0.05
+
+#### 9.4 假设检验结果
+
+（待实验运行后填写）
+
+##### 9.4.1 回归任务（R2）
+
+**Friedman Test**：
+- 统计量 χ²_F = -
+- p-value = -
+- 结论：（拒绝/不拒绝）原假设
+
+**Nemenyi Post-hoc Test**（如果 Friedman 显著）：
+- 临界差值 CD = -
+- 平均秩次：
+  - Full Model: -
+  - MMoE: -
+  - Shared-Bottom: -
+  - No Shared: -
+  - Shallow: -
+  - ...
+
+**成对比较矩阵**（显著差异标记 *）：
+
+|                | Full | MMoE | Shared | No Shared | Shallow | No Dropout |
+| -------------- | ---- | ---- | ------ | --------- | ------- | ---------- |
+| **Full**       | -    |      |        |           |         |            |
+| **MMoE**       |      | -    |        |           |         |            |
+| **Shared**     |      |      | -      |           |         |            |
+| **No Shared**  |      |      |        | -         |         |            |
+| **Shallow**    |      |      |        |           | -       |            |
+| **No Dropout** |      |      |        |           |         | -          |
+
+（\* 表示 p < 0.05，\*\* 表示 p < 0.01，\*\*\* 表示 p < 0.001）
+
+##### 9.4.2 分类任务（Accuracy）
+
+（类似结构）
+
+#### 9.5 统计显著性分析
+
+（待结果后补充，示例要点）：
+
+1. **主检验结论**：
+   - 若 Friedman 显著 → "算法间存在显著差异，需进一步 post-hoc 分析"
+   - 若不显著 → "各算法性能无显著差异，可能因数据集单一或样本量不足"
+
+2. **成对比较解读**：
+   - 示例："MMoE 在回归任务上显著优于 No Shared (p=0.003)，但与 Shared-Bottom 无显著差异 (p=0.42)"
+   - 关注**效应大小**（平均秩次差）而非仅看 p 值
+
+3. **实践建议**：
+   - 若算法 A 与 B 无显著差异，优先选择更简单/高效的模型
+   - 若某消融变体显著下降，说明该组件关键
+
+4. **局限性**：
+   - 单数据集场景下，Friedman test 检验力较弱
+   - 建议扩展到多项目或使用 bootstrap 置信区间
+
+#### 9.6 可视化结果
+
+1. **算法性能箱线图**：展示各算法在多个数据集上的分布
+2. **Nemenyi 临界差值图**：平均秩次 + CD 标记
+3. **成对比较热图**：p 值矩阵，颜色深浅表示显著性
+
+#### 9.7 复现命令
+
+```powershell
+# 假设检验（基于消融实验结果）
+python experiments\hypothesis_testing.py --summaries outputs\ablation\ablation_summary.json --output outputs\hypothesis_testing --metrics R2 RMSE MAE Accuracy F1 F1_macro --test friedman
+
+# 可选：使用 Kruskal-Wallis
+python experiments\hypothesis_testing.py --summaries outputs\ablation\ablation_summary.json --output outputs\hypothesis_testing --test kruskal
+
+# 查看可视化结果
+# 输出：outputs\hypothesis_testing\hypothesis_test_R2.png
+# 输出：outputs\hypothesis_testing\hypothesis_test_R2_heatmap.png
+```
+
+#### 9.8 参考文献
+
+> Demšar, J. (2006). Statistical comparisons of classifiers over multiple data sets. *Journal of Machine Learning Research*, 7, 1-30.
+
+关键要点（原文）：
+- **推荐 Friedman test** 作为主检验（非参数、稳健）
+- **Nemenyi test** 用于 post-hoc 全比较（保守但安全）
+- **不推荐多次 t 检验**（会增加 Type I 错误率）
+- **报告平均秩次和 CD**，而非仅报告 p 值
+- **关注效应大小**，避免"显著但无实际意义"的结论
+
+---
+
+### 10. 综合结论与建议（level2 补充）
+
+#### 10.1 消融实验结论
+
+（待结果）：
+- 共享底层 / 多专家机制的关键性
+- 网络深度与性能的权衡
+- 正则化的有效性
+
+#### 10.2 泛化性结论
+
+（待结果）：
+- 模型在跨项目场景下的迁移能力
+- 项目间差异的主要来源
+- 混合训练的利弊
+
+#### 10.3 假设检验结论
+
+（待结果）：
+- 哪些算法间存在统计显著差异
+- 最优算法的选择依据（兼顾显著性和实用性）
+
+#### 10.4 实践建议
+
+1. **模型选择**：
+   - 若分类召回优先 → Shared-Bottom
+   - 若回归精度优先 → MMoE
+   - 若计算资源受限 → 浅层变体
+
+2. **特征工程**：
+   - 跨项目迁移时，优先使用通用特征（如 PR 规模、评审活跃度）
+   - 避免过度依赖项目特定特征（如特定 author ID）
+
+3. **训练策略**：
+   - 单项目场景：时间前向切分 + 早停
+   - 跨项目场景：domain-adaptation 或混合训练 + 项目 ID 特征
+
+4. **统计评估**：
+   - 始终进行假设检验，避免"偶然性优势"
+   - 报告置信区间或标准差，体现结果稳定性
+
+---
+
+### 附录：实验代码结构
+
+```
+experiments/
+├── ablation_study.py          # 消融实验
+├── cross_project.py           # 泛化性实验
+├── hypothesis_testing.py      # 假设检验
+├── run_all.py                 # 一键运行所有实验
+├── visualize_experiments.py   # 结果可视化
+└── README.md                  # 实验说明文档
+```
+
+详细使用说明见 `experiments/README.md`。-10-19
+
+---
+## level1 & level3
+### 1. 问题与数据
 
 - 任务定义：
   - 任务一（回归）：预测 PR 关闭所需时间（目标字段：`processing_time`），主要指标：MAE、MSE、RMSE、R2。
@@ -25,7 +460,7 @@
 
 ---
 
-## 2. 特征列表（本次实际使用）
+### 2. 特征列表（本次实际使用）
 
 类别特征（12）：
 ```
@@ -69,7 +504,7 @@ author_exp_change_size, complexity_per_reviewer
 
 ---
 
-## 3. 模型与方法
+### 3. 模型与方法
 
 - 多任务学习（MTL）结构：
   - Shared-Bottom：共享底部 MLP，接回归塔与分类塔。
@@ -89,7 +524,7 @@ author_exp_change_size, complexity_per_reviewer
 
 ---
 
-## 4. 结果与可视化分析
+### 4. 结果与可视化分析
 
 图表（已生成，见 `outputs/figures/`）：
 - `loss.png`：训练/验证损失曲线；
@@ -112,7 +547,7 @@ author_exp_change_size, complexity_per_reviewer
 
 ---
 
-## 5. 结论与建议
+### 5. 结论与建议
 
 - 结论：
   1) 多任务学习在本数据上取得兼顾两任务的稳定表现；
@@ -127,7 +562,7 @@ author_exp_change_size, complexity_per_reviewer
 
 ---
 
-## 附：复现实验与生成图表
+### 附：复现实验与生成图表
 
 - 训练 Shared-Bottom：
   ```powershell

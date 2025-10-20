@@ -1,0 +1,49 @@
+# 配置：使用Django数据的SharedBottom模型（对比实验）
+seed: 42
+
+dataset:
+  # 使用engineered目录下的Django数据
+  file: ./engineered/django_engineered.xlsx
+  sheet_name: null
+  # 特征列配置：数值与类别（留空自动检测）
+  numeric_features: []
+  categorical_features: []
+  # 目标列名
+  target_reg: pr_close_time_hours
+  target_cls: pr_merged
+  # 是否对类别做 one-hot（为 False 时将用 Embedding 处理类别，推荐 False）
+  one_hot_categorical: false
+  # 训练/验证/测试比例
+  split:
+    test_size: 0.15
+    val_size: 0.15
+    stratify_by: pr_merged  # 对分类任务可做分层
+
+training:
+  epochs: 30
+  batch_size: 128
+  lr: 0.001
+  weight_decay: 1e-4
+  num_workers: 0
+  patience: 8  # 早停
+  loss_weights:  # 多任务损失的权重
+    reg: 1.0
+    cls: 1.0
+
+model:
+  type: shared_bottom  # shared_bottom模型用于对比
+  # 通用嵌入/底座设置
+  embedding_dim: 32
+  bottom_mlp: [256, 128]
+  dropout: 0.2
+  # SharedBottom 设置（experts相关参数会被忽略）
+  experts: 1  # SharedBottom不使用专家，但保留参数
+  expert_hidden: [128]
+  # 两个任务各自的塔
+  tower_hidden_reg: [128, 64, 32]
+  tower_hidden_cls: [128, 64, 32]
+
+output:
+  dir: ./outputs/django_shared_real
+  save_best: true
+  save_every_epoch: false
