@@ -1,0 +1,50 @@
+# 配置示例：多任务学习（MMoE/SharedBottom）
+seed: 42
+
+dataset:
+  # 数据文件路径，支持 .csv 或 .xlsx
+  file: ./data/synth.csv
+  # 如果是 Excel，指定 sheet 名（可选）
+  sheet_name: null
+  # 特征列配置：数值与类别
+  numeric_features: []
+  categorical_features: []
+  # 目标列名
+  target_reg: pr_close_time_hours
+  target_cls: pr_merged
+  # 是否对类别做 one-hot（为 False 时将用 Embedding 处理类别，推荐 False）
+  one_hot_categorical: false
+  # 训练/验证/测试比例
+  split:
+    test_size: 0.1
+    val_size: 0.1
+    stratify_by: pr_merged  # 对分类任务可做分层
+
+training:
+  epochs: 20
+  batch_size: 256
+  lr: 0.001
+  weight_decay: 0.0
+  num_workers: 0
+  patience: 5  # 早停
+  loss_weights:  # 多任务损失的权重
+    reg: 1.0
+    cls: 1.0
+
+model:
+  type: mmoe  # mmoe | shared_bottom
+  # 通用嵌入/底座设置
+  embedding_dim: 16
+  bottom_mlp: [128, 64]
+  dropout: 0.1
+  # MMoE 特有设置
+  experts: 4
+  expert_hidden: [64]
+  # 两个任务各自的塔
+  tower_hidden_reg: [64, 32]
+  tower_hidden_cls: [64, 32]
+
+output:
+  dir: ./outputs/example
+  save_best: true
+  save_every_epoch: false

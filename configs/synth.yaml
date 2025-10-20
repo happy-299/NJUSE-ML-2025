@@ -1,0 +1,77 @@
+seed: 42
+
+dataset:
+  file: ./data/synth.csv
+  numeric_features: [lines_changed, files_changed, comments, author_reputation]
+  categorical_features: [base_branch, has_tests]
+  target_reg: pr_close_time_hours
+  target_cls: pr_merged
+  one_hot_categorical: false
+  split:
+    test_size: 0.2
+    val_size: 0.1
+    stratify_by: pr_merged
+
+training:
+  epochs: 5
+  batch_size: 128
+  lr: 0.001
+  weight_decay: 0.0
+  num_workers: 0
+  patience: 3
+  loss_weights:
+    reg: 1.0
+    cls: 1.0
+
+model:
+  type: mmoe
+  embedding_dim: 8
+  bottom_mlp: [64]
+  dropout: 0.1
+  experts: 3
+  expert_hidden: [32]
+  tower_hidden_reg: [32]
+  tower_hidden_cls: [32]
+
+output:
+  dir: ./outputs
+  save_best: true
+  save_every_epoch: false
+seed: 42
+
+dataset:
+  file: ./engineered/synth.csv
+  numeric_features: [lines_changed, files_touched, author_exp]
+  categorical_features: [repo, weekday]
+  target_reg: pr_close_time_hours
+  target_cls: pr_merged
+  one_hot_categorical: false
+  split:
+    test_size: 0.2
+    val_size: 0.1
+    stratify_by: pr_merged
+
+training:
+  epochs: 5
+  batch_size: 256
+  lr: 0.001
+  weight_decay: 0.0
+  num_workers: 0
+  patience: 3
+  loss_weights:
+    reg: 1.0
+    cls: 1.0
+
+model:
+  type: mmoe
+  embedding_dim: 8
+  bottom_mlp: [64, 32]
+  dropout: 0.05
+  experts: 3
+  expert_hidden: [32]
+  tower_hidden_reg: [32, 16]
+  tower_hidden_cls: [32, 16]
+
+output:
+  dir: ./outputs/synth
+  save_best: true

@@ -1,47 +1,90 @@
-# NJUSE-ML-2025
-NJUSE-ML-2025 is the project repository for the Machine Learning course in the School of Software Engineering at Nanjing University in 2025.
+# PR 多任务学习项目
 
+项目采用标准的机器学习项目结构，将代码、配置、数据和输出清晰分离：
 
-## 项目目录说明
+- 模型：`models/`（基础组件、MMoE、SharedBottom 模型实现）
+- 工具：`utils/`（数据处理、指标计算、可视化）
+- 配置：`configs/`（实验配置文件）
+- 输出：`outputs/`（训练结果和图表）
+- 检查点：`checkpoints/`（保存模型权重）
+- 数据：`data/`（原始和预处理数据）
 
-- **checkpoints/** 或 **data/**
-  - 保存训练好的模型 checkpoint 或原始/预处理后的数据文件。
-  - 例如：在训练过程中将模型和最佳权重保存到 `checkpoints/`，将下载的数据或中间处理结果放到 `data/`。
+## 准备环境
 
-- **data/get_data.py**
-  - 数据获取和预处理脚本（示例）。
+```powershell
+python -m venv .venv; .\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
-- **models/**
-  - 模型定义目录，用于放置不同模型结构的实现文件，例如 `model1.py`、`model2.py` 等。
-  - 每个模型文件应包含模型类和必要的配置说明。
+## 数据准备
 
-- **utils/**
-  - 工具函数和辅助模块，如可视化 (`visualization.py`)、计算评估指标 (`calculation.py`) 等。
+首次运行前，请先准备数据：
 
-- **config.py**
-  - 配置文件，存放默认参数、路径和超参数。
+```powershell
+# 将数据文件复制到data目录
+python migrate_data.py
+# 或者使用数据获取脚本
+python data/get_data.py
+```
 
-- **main.py**
-  - 训练与测试程序的入口，解析命令行参数并调用相应的流程。
+## 运行训练
 
-- **requirements.txt**
-  - 列出项目依赖的第三方库，便于创建虚拟环境和安装依赖。
+```powershell
+# 方式A：运行示例配置（example.yaml）
+python main.py --config configs\example.yaml
 
-## 使用示例
+# 方式B：运行实际实验配置（Shared-Bottom）
+python main.py --config configs\django_shared.yaml
 
-- 训练：
-  ```bash
-  python main.py --mode train
-  ```
+# 方式C：运行对比实验配置（MMoE）
+python main.py --config configs\django_mmoe.yaml
+```
 
-- 测试：
-  ```bash
-  python main.py --mode test
-  ```
+说明：
+- Windows PowerShell 下参数路径可以用 `\`（推荐）或 `/` 分隔，Python 都能识别。
+- 如果不传 `--config`，脚本会使用默认的 `./configs/example.yaml`。（等价于运行方式A）
+- 训练过程的模型与指标会写到配置里的 `output.dir`（例如 `./outputs/django_shared`）。
 
+为何一次训练只用一个表？
+- `dataset.file` 明确指向单一数据源，保证切分在同一表内完成、实验可复现、避免跨文件泄漏。
+- 如需多仓库/多文件：
+	- 方式一：先合并为单表并添加 `repo` 列（推荐）：
+		```powershell
+		python scripts\merge_csv.py --input_dir data --output data\merged.csv
+		```
+		然后在配置里将 `dataset.file` 改为 `./data/merged.csv`。
+	- 方式二：分别训练后再对比：为每个文件各自建一份配置，训练完成后使用 `utils/visualization.py` 中的函数汇总。
 
-## 建议
+## 目录说明
 
-- 在开始训练前，请将数据放到 `data/` 下，或在 `data/get_data.py` 中实现数据下载逻辑。
-- 将训练过程中产生的模型保存到 `checkpoints/`，并加入 .gitignore（如果需要）。
-- 根据实际框架（PyTorch/TensorFlow）替换 `models/` 中的示例实现。
+- `models/base.py`：基础网络组件（嵌入层、MLP 等）
+- `models/mmoe.py`：MMoE 模型实现（多专家混合网络）
+- `models/shared_bottom.py`：SharedBottom 模型实现（共享底层网络）
+- `models/model.py`：完整的多任务学习模型
+- `utils/data_processing.py`：CSV/XLSX 读取、数值标准化、类别 embedding/one-hot、数据集切分
+- `utils/metrics.py`：MAE/MSE/RMSE/R2 与 Accuracy/Precision/Recall/F1
+- `utils/visualization.py`：训练历史和模型比较可视化
+- `config.py`：默认配置管理
+- `main.py`：训练主程序入口
+- `configs/example.yaml`：训练配置示例（可复制修改）
+
+报告与图表：
+- 实验报告：`REPORT.md`
+- 图表输出：`outputs/figures/`（使用 `utils/visualization.py` 生成）
+
+可视化结果示例：
+```python
+# 绘制单个模型的训练历史
+from utils.visualization import plot_training_history
+plot_training_history("outputs/example/history.json", save_dir="outputs/figures")
+
+# 比较多个模型
+from utils.visualization import plot_model_comparison
+plot_model_comparison(
+    ["outputs/django_mmoe", "outputs/django_shared"],
+    ["MMoE", "SharedBottom"],
+    save_path="outputs/figures/model_comparison.png"
+)
+```
+
+如需自定义列名或处理规则，请编辑 `configs/example.yaml` 或在 `utils/data_processing.py` 中扩展。

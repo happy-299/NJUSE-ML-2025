@@ -1,4 +1,13 @@
-# requirements.txt
-pandas
-numpy
-matplotlib
+# Core ML/Data
+numpy>=1.26
+pandas>=2.2
+scikit-learn>=1.4
+scipy>=1.12
+
+# Deep Learning
+torch>=2.2
+
+# Utils
+pyyaml>=6.0.1
+joblib>=1.4
+tqdm>=4.66

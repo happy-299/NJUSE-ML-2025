@@ -1,0 +1,54 @@
+seed: 42
+
+dataset:
+  file: ./engineered/django_engineered.xlsx
+  sheet_name: null
+  # 不指定 numeric_features 时，将自动选择所有数值型列（不含目标列）
+  numeric_features: null
+  # 为避免高基数文本，显式选择少量布尔/低基数列作为类别特征
+  categorical_features:
+    - state
+    - has_test
+    - has_feature
+    - has_bug
+    - has_document
+    - has_improve
+    - has_refactor
+    - is_reviewed
+    - last_comment_mention
+    - has_bug_keyword
+    - has_feature_keyword
+    - has_document_keyword
+  target_reg: processing_time
+  target_cls: merged
+  one_hot_categorical: false
+  split:
+    test_size: 0.2
+    val_size: 0.1
+    stratify_by: merged
+
+training:
+  epochs: 8
+  batch_size: 256
+  lr: 0.001
+  weight_decay: 0.0
+  num_workers: 0
+  patience: 3
+  loss_weights:
+    reg: 1.0
+    cls: 1.0
+
+model:
+  type: mmoe
+  embedding_dim: 8
+  bottom_mlp: [128, 64]
+  dropout: 0.1
+  experts: 4
+  expert_hidden: [64]
+  tower_hidden_reg: [64, 32]
+  tower_hidden_cls: [64, 32]
+
+output:
+  dir: ./outputs
+  save_best: true
+  save_every_epoch: false
