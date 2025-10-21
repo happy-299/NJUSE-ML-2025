@@ -313,7 +313,62 @@ Total_Loss = w_reg * Loss_reg + w_cls * Loss_cls
 ### ⅰ. 特征
 
 **特征工程说明**:
+以下为根据数据集源数据新增的特征
+### 时间特征：
 
+processing_time：PR从创建到关闭的总时间（小时）
+
+first_response_time：首次评论响应时间（小时）
+
+last_response_time：最后评论响应时间（小时）
+
+created_hour：创建时间的小时（0-23）
+
+created_dayofweek：创建时间的星期几（0=周一，6=周日）
+
+created_month：创建时间的月份（1-12）
+
+### 文本特征：
+
+title_length：标题长度（字符数）
+
+body_length：正文长度（字符数）
+
+has_bug_keyword：是否包含bug相关关键词
+
+has_feature_keyword：是否包含功能相关关键词
+
+has_document_keyword：是否包含文档相关关键词
+
+### 变更特征：
+
+total_changes：总变更行数（添加+删除）
+
+net_changes：净变更行数（添加-删除）
+
+change_density：变更密度（每文件变更行数）
+
+additions_per_file：每文件添加行数
+
+### 参与者特征：
+
+author_experience：作者经验（项目内首次提交到当前PR的天数）
+
+author_activity：作者活跃度（项目内PR数量）
+
+reviewer_count：评审者数量（估算）
+
+### 项目特征：
+
+project_age：项目年龄（从第一个PR到当前PR的天数）
+
+open_pr_count：开放PR数量（项目内）
+
+### 交互特征：
+
+author_exp_change_size：作者经验×变更大小
+
+complexity_per_reviewer：每个评审者的变更复杂度
 
 
 ---
