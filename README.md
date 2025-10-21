@@ -14,6 +14,9 @@
 ```powershell
 python -m venv .venv; .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+
+# 验证环境是否正确配置
+python experiments\check_environment.py
 ```
 
 ## 数据准备
@@ -88,3 +91,50 @@ plot_model_comparison(
 ```
 
 如需自定义列名或处理规则，请编辑 `configs/example.yaml` 或在 `utils/data_processing.py` 中扩展。
+
+## Level 2 实验
+
+Level 2 包含以下高级实验：
+
+### 1. 模型组件消融实验
+测试不同模型组件对性能的影响：
+
+```powershell
+# 运行所有消融实验
+python experiments\ablation_study.py --config configs\django_mmoe.yaml --output outputs\ablation_mmoe --ablation all
+```
+
+支持的消融类型：
+- `no_dropout`: 移除Dropout层
+- `shallow_tower`: 浅层任务塔
+- `small_embedding`: 小embedding维度
+- `fewer_experts`: 减少专家数量（MMoE）
+- `single_expert`: 单专家（MMoE）
+
+### 2. 跨项目泛化性实验
+评估模型在不同项目间的泛化能力：
+
+```powershell
+# 使用3个项目进行跨项目实验
+python experiments\cross_project.py --config configs\django_mmoe.yaml --output outputs\cross_project --projects django react tensorflow
+```
+
+### 3. 假设检验
+使用Friedman test和Nemenyi post-hoc test严格比较模型性能：
+
+```powershell
+# 比较两个模型
+python experiments\hypothesis_test.py --result_dirs outputs\django_mmoe outputs\django_shared --output outputs\hypothesis_test --metric R2
+
+# 基于跨项目结果进行检验
+python experiments\hypothesis_test.py --result_dirs outputs\cross_project --output outputs\hypothesis_test --metric R2 --cross_project
+```
+
+### 运行所有Level 2实验
+
+```powershell
+# 一键运行所有实验
+python experiments\run_all_experiments.py --base_config configs\django_mmoe.yaml
+```
+
+详细说明请参见 `experiments/README.md`。

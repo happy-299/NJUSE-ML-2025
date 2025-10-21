@@ -1,0 +1,56 @@
+# 跨项目实验配置
+# 用于跨项目泛化性实验
+
+seed: 42
+
+dataset:
+  # 文件路径会在cross_project.py中动态修改
+  file: ./engineered/django_engineered.xlsx
+  sheet_name: null
+  
+  # 特征配置（会根据实际数据自动推断）
+  numeric_features: []
+  categorical_features: []
+  
+  # 目标列
+  target_reg: processing_time
+  target_cls: merged
+  
+  # 类别特征使用embedding
+  one_hot_categorical: false
+  
+  # 数据切分（跨项目实验中会被覆盖）
+  split:
+    test_size: 0.0  # 测试集使用独立项目
+    val_size: 0.1
+    stratify_by: merged
+
+training:
+  epochs: 15  # 跨项目实验可能需要更多epochs
+  batch_size: 256
+  lr: 0.001
+  weight_decay: 0.0001  # 增加正则化以提升泛化性
+  num_workers: 0
+  patience: 5
+  loss_weights:
+    reg: 1.0
+    cls: 1.0
+
+model:
+  type: mmoe
+  embedding_dim: 16
+  bottom_mlp: [128, 64]
+  dropout: 0.2  # 增加dropout以提升泛化性
+  
+  # MMoE配置
+  experts: 4
+  expert_hidden: [64]
+  
+  # 任务塔
+  tower_hidden_reg: [64, 32]
+  tower_hidden_cls: [64, 32]
+
+output:
+  dir: ./outputs/cross_project
+  save_best: true
+  save_every_epoch: false
