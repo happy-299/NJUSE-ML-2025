@@ -6,7 +6,11 @@ import torch.nn.functional as F
 
 
 class EmbeddingBlock(nn.Module):
-    def __init__(self, cat_cardinalities: List[int], embedding_dim: int, dropout: float = 0.0):
+
+    def __init__(self,
+                 cat_cardinalities: List[int],
+                 embedding_dim: int,
+                 dropout: float = 0.0):
         """
         类别特征的嵌入层
         
@@ -26,7 +30,11 @@ class EmbeddingBlock(nn.Module):
 
     def forward(self, x_cat: Optional[torch.Tensor]) -> torch.Tensor:
         if not self.use_embedding or x_cat is None or x_cat.numel() == 0:
-            return torch.empty(x_cat.shape[0], 0, device=x_cat.device) if x_cat is not None else torch.empty(0)
+            if x_cat is not None:
+                return torch.empty(x_cat.shape[0], 0, device=x_cat.device)
+            else:
+                # return an empty tensor on default device (cpu) - caller should move to correct device
+                return torch.empty(0)
         outs = []
         for i, emb in enumerate(self.embs):
             outs.append(emb(x_cat[:, i]))
@@ -35,7 +43,11 @@ class EmbeddingBlock(nn.Module):
 
 
 class BottomMLP(nn.Module):
-    def __init__(self, input_dim: int, hidden: List[int], dropout: float = 0.0):
+
+    def __init__(self,
+                 input_dim: int,
+                 hidden: List[int],
+                 dropout: float = 0.0):
         """
         底层MLP网络
         

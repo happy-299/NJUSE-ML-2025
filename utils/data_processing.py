@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Dict, Any
 
 import numpy as np
@@ -12,26 +12,38 @@ from torch.utils.data import Dataset, DataLoader
 
 @dataclass
 class DataConfig:
-    """数据配置类"""
+    """数据集配置，完整版"""
+    # 文件路径相关
     file: str
-    sheet_name: Optional[str] = None
-    numeric_features: Optional[List[str]] = None
-    categorical_features: Optional[List[str]] = None
-    target_reg: str = "pr_close_time_hours"
-    target_cls: str = "pr_merged"
+    sheet_name: str = None
+
+    # 特征列定义
+    numeric_features: list = field(default_factory=list)
+    categorical_features: list = field(default_factory=list)
+    exclude_cols: list = field(default_factory=list)
+
+    # 目标列定义
+    target_reg: str = "processing_time"
+    target_cls: str = "merged"
+
+    # 数据处理选项
     one_hot_categorical: bool = False
-    split: Dict[str, Any] = None
+
+    # 数据集划分配置
+    split: dict = field(default_factory=dict)
 
 
 class PRDataset(Dataset):
     """PR数据集类，用于PyTorch数据加载器"""
+
     def __init__(self,
                  X_num: Optional[np.ndarray],
                  X_cat: Optional[np.ndarray],
                  y_reg: np.ndarray,
                  y_cls: np.ndarray,
                  one_hot_categorical: bool = False):
-        self.X_num = torch.from_numpy(X_num).float() if X_num is not None else None
+        self.X_num = torch.from_numpy(
+            X_num).float() if X_num is not None else None
         # one-hot 时为 float，否则为 Long 索引
         if X_cat is not None:
             if one_hot_categorical:
@@ -48,13 +60,16 @@ class PRDataset(Dataset):
 
     def __getitem__(self, idx):
         x_num = self.X_num[idx] if self.X_num is not None else torch.empty(0)
-        x_cat = self.X_cat[idx] if self.X_cat is not None else torch.empty(0, dtype=torch.long)
+        x_cat = self.X_cat[idx] if self.X_cat is not None else torch.empty(
+            0, dtype=torch.long)
         return x_num, x_cat, self.y_reg[idx], self.y_cls[idx]
 
 
 class FeatureProcessor:
     """特征处理器，处理数值特征和类别特征"""
-    def __init__(self, numeric_features: List[str], categorical_features: List[str], one_hot_categorical: bool):
+
+    def __init__(self, numeric_features: List[str],
+                 categorical_features: List[str], one_hot_categorical: bool):
         self.numeric_features = numeric_features or []
         self.categorical_features = categorical_features or []
         self.one_hot_categorical = one_hot_categorical
@@ -70,34 +85,44 @@ class FeatureProcessor:
             self.scaler.fit(df[self.numeric_features])
         if self.categorical_features and not self.one_hot_categorical:
             for col in self.categorical_features:
-                uniques = pd.Series(df[col].astype(str).fillna("<NA>").unique())
+                uniques = pd.Series(
+                    df[col].astype(str).fillna("<NA>").unique())
                 # 保留 0 作为未知/填充
                 vocab = {v: i + 1 for i, v in enumerate(sorted(uniques))}
                 self.cat_vocab[col] = vocab
         if self.categorical_features and self.one_hot_categorical:
-            dummies = pd.get_dummies(df[self.categorical_features].astype(str).fillna("<NA>"), drop_first=False)
+            dummies = pd.get_dummies(
+                df[self.categorical_features].astype(str).fillna("<NA>"),
+                drop_first=False)
             # 固定列顺序
             self.one_hot_columns = dummies.columns.tolist()
 
-    def transform(self, df: pd.DataFrame) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    def transform(
+            self, df: pd.DataFrame
+    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """转换特征数据"""
         X_num = None
         X_cat = None
         if self.numeric_features:
-            X_num = self.scaler.transform(df[self.numeric_features]).astype(np.float32)
+            X_num = self.scaler.transform(df[self.numeric_features]).astype(
+                np.float32)
         if self.categorical_features:
             if self.one_hot_categorical:
                 # 使用 pandas.get_dummies 进行 one-hot
-                dummies = pd.get_dummies(df[self.categorical_features].astype(str).fillna("<NA>"), drop_first=False)
+                dummies = pd.get_dummies(
+                    df[self.categorical_features].astype(str).fillna("<NA>"),
+                    drop_first=False)
                 if self.one_hot_columns is not None:
-                    dummies = dummies.reindex(columns=self.one_hot_columns, fill_value=0)
+                    dummies = dummies.reindex(columns=self.one_hot_columns,
+                                              fill_value=0)
                 X_cat = dummies.values.astype(np.float32)
             else:
                 # 将类别映射到索引
                 cat_arrays = []
                 for col in self.categorical_features:
                     vocab = self.cat_vocab.get(col, {})
-                    indices = df[col].astype(str).fillna("<NA>").map(lambda x: vocab.get(x, 0)).astype(int).values
+                    indices = df[col].astype(str).fillna("<NA>").map(
+                        lambda x: vocab.get(x, 0)).astype(int).values
                     cat_arrays.append(indices)
                 X_cat = np.stack(cat_arrays, axis=1).astype(np.int64)
         return X_num, X_cat
@@ -107,7 +132,8 @@ class FeatureProcessor:
         num_dim = len(self.numeric_features) if self.numeric_features else 0
         if self.one_hot_categorical:
             # 计算 one-hot 后的总维度
-            cat_dim = len(self.one_hot_columns) if self.one_hot_columns is not None else 0
+            cat_dim = len(self.one_hot_columns
+                          ) if self.one_hot_columns is not None else 0
             return num_dim, [], cat_dim
         else:
             cat_cardinalities = []
@@ -132,10 +158,12 @@ def load_dataframe(file: str, sheet_name: Optional[str]) -> pd.DataFrame:
         raise ValueError(f"不支持的文件格式: {ext}")
 
 
-def prepare_dataloaders(cfg: DataConfig,
-                        batch_size: int,
-                        num_workers: int = 0,
-                        seed: int = 42) -> Tuple[DataLoader, DataLoader, DataLoader, Dict[str, Any]]:
+def prepare_dataloaders(
+    cfg: DataConfig,
+    batch_size: int,
+    num_workers: int = 0,
+    seed: int = 42
+) -> Tuple[DataLoader, DataLoader, DataLoader, Dict[str, Any]]:
     """准备数据加载器"""
     df = load_dataframe(cfg.file, cfg.sheet_name)
 
@@ -144,13 +172,17 @@ def prepare_dataloaders(cfg: DataConfig,
         raise ValueError(f"缺少目标列: {cfg.target_reg}, {cfg.target_cls}")
 
     # 默认数值/类别列推断（如未提供）
-    numeric_features = cfg.numeric_features or df.select_dtypes(include=[np.number]).columns.tolist()
+    numeric_features = cfg.numeric_features or df.select_dtypes(
+        include=[np.number]).columns.tolist()
     # 去掉目标列
-    numeric_features = [c for c in numeric_features if c not in [cfg.target_reg, cfg.target_cls]]
+    numeric_features = [
+        c for c in numeric_features
+        if c not in [cfg.target_reg, cfg.target_cls]
+    ]
 
     categorical_features = cfg.categorical_features or [
-        c for c in df.columns
-        if c not in numeric_features + [cfg.target_reg, cfg.target_cls]
+        c for c in df.columns if c not in numeric_features +
+        [cfg.target_reg, cfg.target_cls] + cfg.exclude_cols
     ]
 
     # 简单缺失处理
@@ -165,12 +197,24 @@ def prepare_dataloaders(cfg: DataConfig,
         y_cls = y_cls_raw.astype(np.float32)
     else:
         # 尝试智能映射各种取值到 0/1
-        mapping = {"true": 1.0, "false": 0.0, "1": 1.0, "0": 0.0, 1: 1.0, 0: 0.0, "yes": 1.0, "no": 0.0}
+        mapping = {
+            "true": 1.0,
+            "false": 0.0,
+            "1": 1.0,
+            "0": 0.0,
+            1: 1.0,
+            0: 0.0,
+            "yes": 1.0,
+            "no": 0.0
+        }
+
         def to01(v):
             if isinstance(v, str):
                 v_low = v.strip().lower()
-                return mapping.get(v_low, float(v)) if v_low in mapping else float(v)
+                return mapping.get(v_low,
+                                   float(v)) if v_low in mapping else float(v)
             return mapping.get(v, float(v))
+
         y_cls = np.array([to01(v) for v in y_cls_raw], dtype=np.float32)
 
     # 划分数据集
@@ -180,38 +224,58 @@ def prepare_dataloaders(cfg: DataConfig,
     stratify_vals = df[stratify_by] if stratify_by in df.columns else None
 
     X_train, X_temp, y_reg_train, y_reg_temp, y_cls_train, y_cls_temp = train_test_split(
-        df, y_reg, y_cls, test_size=test_size + val_size, random_state=seed,
-        stratify=stratify_vals if stratify_vals is not None else None
-    )
+        df,
+        y_reg,
+        y_cls,
+        test_size=test_size + val_size,
+        random_state=seed,
+        stratify=stratify_vals if stratify_vals is not None else None)
 
     rel_val = val_size / (test_size + val_size)
     X_val, X_test, y_reg_val, y_reg_test, y_cls_val, y_cls_test = train_test_split(
-        X_temp, y_reg_temp, y_cls_temp, test_size=1 - rel_val, random_state=seed,
-        stratify=(X_temp[stratify_by] if stratify_vals is not None else None)
-    )
+        X_temp,
+        y_reg_temp,
+        y_cls_temp,
+        test_size=1 - rel_val,
+        random_state=seed,
+        stratify=(X_temp[stratify_by] if stratify_vals is not None else None))
 
     # 拟合特征处理器
-    processor = FeatureProcessor(numeric_features, categorical_features, cfg.one_hot_categorical)
+    processor = FeatureProcessor(numeric_features, categorical_features,
+                                 cfg.one_hot_categorical)
     processor.fit(X_train)
 
     Xnum_tr, Xcat_tr = processor.transform(X_train)
     Xnum_v, Xcat_v = processor.transform(X_val)
     Xnum_te, Xcat_te = processor.transform(X_test)
 
-    train_ds = PRDataset(Xnum_tr, Xcat_tr, y_reg_train.astype(np.float32), y_cls_train.astype(np.float32), cfg.one_hot_categorical)
-    val_ds = PRDataset(Xnum_v, Xcat_v, y_reg_val.astype(np.float32), y_cls_val.astype(np.float32), cfg.one_hot_categorical)
-    test_ds = PRDataset(Xnum_te, Xcat_te, y_reg_test.astype(np.float32), y_cls_test.astype(np.float32), cfg.one_hot_categorical)
+    train_ds = PRDataset(Xnum_tr, Xcat_tr, y_reg_train.astype(np.float32),
+                         y_cls_train.astype(np.float32),
+                         cfg.one_hot_categorical)
+    val_ds = PRDataset(Xnum_v, Xcat_v, y_reg_val.astype(np.float32),
+                       y_cls_val.astype(np.float32), cfg.one_hot_categorical)
+    test_ds = PRDataset(Xnum_te, Xcat_te, y_reg_test.astype(np.float32),
+                        y_cls_test.astype(np.float32), cfg.one_hot_categorical)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    train_loader = DataLoader(train_ds,
+                              batch_size=batch_size,
+                              shuffle=True,
+                              num_workers=num_workers)
+    val_loader = DataLoader(val_ds,
+                            batch_size=batch_size,
+                            shuffle=False,
+                            num_workers=num_workers)
+    test_loader = DataLoader(test_ds,
+                             batch_size=batch_size,
+                             shuffle=False,
+                             num_workers=num_workers)
 
     num_dim, cat_cardinalities, cat_onehot_dim = processor.get_output_dims()
 
     meta = {
         "numeric_dim": num_dim,
         "cat_cardinalities": cat_cardinalities,  # [] if one-hot
-        "cat_onehot_dim": cat_onehot_dim,        # 0 if embedding
+        "cat_onehot_dim": cat_onehot_dim,  # 0 if embedding
         "numeric_features": numeric_features,
         "categorical_features": categorical_features,
         "one_hot_categorical": cfg.one_hot_categorical,

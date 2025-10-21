@@ -29,9 +29,31 @@ def set_seed(seed: int):
 def to_device(batch, device: torch.device):
     """将数据批次移至指定设备"""
     x_num, x_cat, y_reg, y_cls = batch
-    x_num = x_num.to(device) if x_num is not None and x_num.numel() > 0 else None
-    x_cat = x_cat.to(device) if x_cat is not None and x_cat.numel() > 0 else None
-    return x_num, x_cat, y_reg.to(device), y_cls.to(device)
+    # batch size
+    try:
+        bsz = y_reg.shape[0]
+    except Exception:
+        bsz = None
+
+    # move targets
+    y_reg = y_reg.to(device)
+    y_cls = y_cls.to(device)
+
+    # ensure input tensors exist and are on the same device
+    if x_num is None or (hasattr(x_num, 'numel') and x_num.numel() == 0):
+        # create an empty numeric tensor with shape (bsz, 0) on target device
+        x_num = torch.empty((bsz if bsz is not None else 0, 0), device=device)
+    else:
+        x_num = x_num.to(device)
+
+    if x_cat is None or (hasattr(x_cat, 'numel') and x_cat.numel() == 0):
+        x_cat = torch.empty((bsz if bsz is not None else 0, 0),
+                            dtype=torch.long,
+                            device=device)
+    else:
+        x_cat = x_cat.to(device)
+
+    return x_num, x_cat, y_reg, y_cls
 
 
 def build_model(meta: Dict[str, Any], model_cfg: Dict[str, Any]) -> MTLModel:
@@ -52,7 +74,12 @@ def build_model(meta: Dict[str, Any], model_cfg: Dict[str, Any]) -> MTLModel:
     return model
 
 
-def run_epoch(model, loader, device, criterion_reg, criterion_cls, optimizer=None):
+def run_epoch(model,
+              loader,
+              device,
+              criterion_reg,
+              criterion_cls,
+              optimizer=None):
     """运行一个训练/评估周期"""
     is_train = optimizer is not None
     model.train() if is_train else model.eval()
@@ -86,7 +113,8 @@ def run_epoch(model, loader, device, criterion_reg, criterion_cls, optimizer=Non
     y_cls_prob = np.vstack(y_cls_prob_list)
 
     reg_metrics_values = regression_metrics(y_reg_true, y_reg_pred)
-    cls_metrics_values = classification_metrics(y_cls_true.astype(int), y_cls_prob)
+    cls_metrics_values = classification_metrics(y_cls_true.astype(int),
+                                                y_cls_prob)
     return avg_loss, reg_metrics_values, cls_metrics_values
 
 
@@ -113,12 +141,17 @@ def train_and_eval(config_path: str):
     patience = int(training.get("patience", 5))
 
     train_loader, val_loader, test_loader, meta = prepare_dataloaders(
-        dcfg, batch_size=batch_size, num_workers=num_workers, seed=seed
-    )
+        dcfg, batch_size=batch_size, num_workers=num_workers, seed=seed)
 
     # 设备选择
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = build_model(meta, model_cfg).to(device)
+    # Debug: show device placement
+    try:
+        param_dev = next(model.parameters()).device
+    except StopIteration:
+        param_dev = torch.device('cpu')
+    print(f"Using device: {device}; model parameters on: {param_dev}")
 
     # 损失函数
     criterion_reg = nn.MSELoss()
@@ -131,10 +164,13 @@ def train_and_eval(config_path: str):
 
     # 将权重融合到 criterion
     def combined_loss(y_reg_pred, y_reg, y_cls_prob, y_cls):
-        return w_reg * criterion_reg(y_reg_pred, y_reg) + w_cls * criterion_cls(y_cls_prob, y_cls)
+        return w_reg * criterion_reg(
+            y_reg_pred, y_reg) + w_cls * criterion_cls(y_cls_prob, y_cls)
 
     # 优化器
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(),
+                                 lr=lr,
+                                 weight_decay=weight_decay)
 
     # 输出目录设置
     out_dir = out_cfg.get("dir", OUTPUTS_DIR)
@@ -166,7 +202,9 @@ def train_and_eval(config_path: str):
 
         # 验证
         with torch.no_grad():
-            val_loss, val_reg_m, val_cls_m = run_epoch(model, val_loader, device, criterion_reg, criterion_cls)
+            val_loss, val_reg_m, val_cls_m = run_epoch(model, val_loader,
+                                                       device, criterion_reg,
+                                                       criterion_cls)
 
         # 记录训练历史
         record = {
@@ -183,7 +221,12 @@ def train_and_eval(config_path: str):
             best_metric = val_loss
             best_epoch = epoch
             patience_left = patience
-            torch.save({"model_state": model.state_dict(), "meta": meta, "cfg": cfg}, best_path)
+            torch.save(
+                {
+                    "model_state": model.state_dict(),
+                    "meta": meta,
+                    "cfg": cfg
+                }, best_path)
         else:
             patience_left -= 1
 
@@ -191,7 +234,9 @@ def train_and_eval(config_path: str):
         with open(history_path, "w", encoding="utf-8") as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
 
-        print(f"Epoch {epoch}: train_loss={train_loss:.4f}, val_loss={val_loss:.4f}")
+        print(
+            f"Epoch {epoch}: train_loss={train_loss:.4f}, val_loss={val_loss:.4f}"
+        )
         if patience_left <= 0:
             print(f"早停：Epoch {epoch}（最佳：Epoch {best_epoch}）")
             break
@@ -203,11 +248,14 @@ def train_and_eval(config_path: str):
         except TypeError:
             ckpt = torch.load(best_path, map_location=device)
 
-        state_dict = ckpt["model_state"] if isinstance(ckpt, dict) and "model_state" in ckpt else ckpt
+        state_dict = ckpt["model_state"] if isinstance(
+            ckpt, dict) and "model_state" in ckpt else ckpt
         model.load_state_dict(state_dict)
 
     with torch.no_grad():
-        test_loss, test_reg_m, test_cls_m = run_epoch(model, test_loader, device, criterion_reg, criterion_cls)
+        test_loss, test_reg_m, test_cls_m = run_epoch(model, test_loader,
+                                                      device, criterion_reg,
+                                                      criterion_cls)
 
     # 保存结果
     results = {
@@ -217,7 +265,8 @@ def train_and_eval(config_path: str):
         "test_reg": test_reg_m,
         "test_cls": test_cls_m,
     }
-    with open(os.path.join(out_dir, "results.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(out_dir, "results.json"), "w",
+              encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
     print("测试结果:", json.dumps(results, ensure_ascii=False, indent=2))
@@ -226,9 +275,12 @@ def train_and_eval(config_path: str):
 def main():
     """主函数：解析命令行参数并启动训练"""
     parser = argparse.ArgumentParser(description="多任务学习模型训练")
-    parser.add_argument("--config", type=str, default="./configs/example.yaml", help="配置文件路径")
+    parser.add_argument("--config",
+                        type=str,
+                        default="./configs/example.yaml",
+                        help="配置文件路径")
     args = parser.parse_args()
-    
+
     train_and_eval(args.config)
 
 
