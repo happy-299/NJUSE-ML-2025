@@ -1,6 +1,12 @@
-# 机器学习lab3实验报告
+# 机器学习lab2实验报告
 
 本报告面向"预测 Pull Request 关闭时长（回归）与是否合入（分类）"两大任务。所有实验均可通过提供的 YAML 配置、训练脚本与可视化工具复现。
+
+github地址：https://github.com/happy-299/NJUSE-ML-2025/tree/lab2
+
+**由于特征数据和原始数据文件非常大，请务必在复现该实验代码时先从 https://box.nju.edu.cn/d/0f7393c0727240f3b539/ 下载特征数据，并放置在engineered/目录下**
+
+> 特殊说明：本次实验原始数据和处理后的数据文件较大，因此没有在压缩包中上传，可以在 https://box.nju.edu.cn/d/0f7393c0727240f3b539/ 查看
 
 ---
 
@@ -314,7 +320,7 @@ Total_Loss = w_reg * Loss_reg + w_cls * Loss_cls
 
 **特征工程说明**:
 以下为根据数据集源数据新增的特征
-### 时间特征：
+#### 时间特征：
 
 processing_time：PR从创建到关闭的总时间（小时）
 
@@ -328,7 +334,7 @@ created_dayofweek：创建时间的星期几（0=周一，6=周日）
 
 created_month：创建时间的月份（1-12）
 
-### 文本特征：
+#### 文本特征：
 
 title_length：标题长度（字符数）
 
@@ -340,7 +346,7 @@ has_feature_keyword：是否包含功能相关关键词
 
 has_document_keyword：是否包含文档相关关键词
 
-### 变更特征：
+#### 变更特征：
 
 total_changes：总变更行数（添加+删除）
 
@@ -350,7 +356,7 @@ change_density：变更密度（每文件变更行数）
 
 additions_per_file：每文件添加行数
 
-### 参与者特征：
+#### 参与者特征：
 
 author_experience：作者经验（项目内首次提交到当前PR的天数）
 
@@ -358,13 +364,13 @@ author_activity：作者活跃度（项目内PR数量）
 
 reviewer_count：评审者数量（估算）
 
-### 项目特征：
+#### 项目特征：
 
 project_age：项目年龄（从第一个PR到当前PR的天数）
 
 open_pr_count：开放PR数量（项目内）
 
-### 交互特征：
+#### 交互特征：
 
 author_exp_change_size：作者经验×变更大小
 
