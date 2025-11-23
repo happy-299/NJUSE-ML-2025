@@ -11,21 +11,24 @@ import time
 import os
 from datetime import datetime
 
-def load_data(file_path, max_samples=100):
+def load_data(file_path, max_samples=None):
     """加载真实数据"""
-    print(f"加载数据: {os.path.basename(file_path)} (最多{max_samples}样本)")
+    if max_samples:
+        print(f"加载数据: {os.path.basename(file_path)} (最多{max_samples}样本)")
+    else:
+        print(f"加载数据: {os.path.basename(file_path)} (全部数据)")
     examples = []
     
     with open(file_path, 'r', encoding='utf-8') as f:
         for idx, line in enumerate(f):
-            if idx >= max_samples:
+            if max_samples and idx >= max_samples:
                 break
             try:
                 data = json.loads(line.strip())
                 if all(key in data for key in ['old_hunk', 'comment', 'new']):
                     examples.append({
-                        'input': f"Review: {data['comment'][:200]} Code: {data['old_hunk'][:300]}",
-                        'target': data['new'][:200],  # 限制长度
+                        'input': f"Review: {data['comment']} Code: {data['old_hunk']}",
+                        'target': data['new'],
                         'lang': data.get('lang', 'unknown')
                     })
             except:
@@ -43,8 +46,8 @@ def run_experiment():
     start_time = time.time()
     
     # 1. 加载数据
-    print("\\n[1/4] 数据加载")
-    test_data = load_data('../../data/raw/ref-test.jsonl', max_samples=50)
+    print("\n[1/4] 数据加载")
+    test_data = load_data('../../data/raw/ref-test.jsonl')  # 使用全部测试数据
     
     if not test_data:
         print("❌ 无法加载数据")
@@ -77,14 +80,14 @@ def run_experiment():
             inputs = tokenizer.encode(
                 example['input'], 
                 return_tensors="pt", 
-                max_length=400, 
+                max_length=512, 
                 truncation=True
             )
             
             with torch.no_grad():
                 outputs = model.generate(
                     inputs,
-                    max_length=150,
+                    max_length=256,
                     num_beams=2,
                     early_stopping=True,
                     pad_token_id=tokenizer.pad_token_id

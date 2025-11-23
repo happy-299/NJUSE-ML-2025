@@ -368,10 +368,10 @@ def main():
     parser.add_argument("--max_target_length", type=int, default=128)
     
     # 数据采样参数
-    parser.add_argument("--max_train_samples", type=int, default=50000, 
-                       help="训练集最大样本数 (用于快速实验)")
-    parser.add_argument("--max_valid_samples", type=int, default=5000,
-                       help="验证集最大样本数")
+    parser.add_argument("--max_train_samples", type=int, default=None, 
+                       help="训练集最大样本数 (None表示使用全部数据)")
+    parser.add_argument("--max_valid_samples", type=int, default=None,
+                       help="验证集最大样本数 (None表示使用全部数据)")
     
     args = parser.parse_args()
     

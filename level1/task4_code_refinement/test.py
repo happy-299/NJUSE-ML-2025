@@ -294,8 +294,8 @@ def main():
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--max_source_length", type=int, default=512)
     parser.add_argument("--max_target_length", type=int, default=128)
-    parser.add_argument("--max_test_samples", type=int, default=1000,
-                       help="测试样本数量 (用于快速评估)")
+    parser.add_argument("--max_test_samples", type=int, default=None,
+                       help="测试样本数量 (None表示使用全部数据)")
     
     # 生成参数
     parser.add_argument("--num_beams", type=int, default=5)
