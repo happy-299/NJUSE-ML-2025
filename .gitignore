@@ -63,4 +63,42 @@ outputs/**/*.txt
 # 但保留 .gitkeep
 !**/.gitkeep
 
-# 说明：其他未在 README.md 中列出的文件（例如临时文件、虚拟环境、模型权重、大数据等）将被忽略。
+# === 补充常见大文件和临时文件类型 ===
+# 数据文件格式
+*.jsonl
+*.csv
+*.tsv
+*.dat
+*.h5
+*.hdf5
+
+# 模型和序列化文件
+*.pkl
+*.pickle
+
+# 训练日志和监控
+logs/
+wandb/
+tensorboard_logs/
+*.log
+
+# Jupyter Notebook 检查点
+.ipynb_checkpoints/
+
+# 虚拟环境
+venv/
+env/
+conda-env/
+
+# IDE 配置
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统临时文件  
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# 说明：根据 README.md 注意事项配置，避免提交大文件(数据集、模型权重)到 Git

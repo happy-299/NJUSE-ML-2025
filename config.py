@@ -16,6 +16,11 @@ DIFF_QUALITY_DIR = RAW_DATA_DIR / "Diff_Quality_Estimation"
 COMMENT_GEN_DIR = RAW_DATA_DIR / "Comment_Generation"
 CODE_REFINE_DIR = RAW_DATA_DIR / "Code_Refinement"
 
+# 任务四数据文件直接在 raw 目录下
+TASK4_TRAIN_FILE = RAW_DATA_DIR / "ref-train.jsonl"
+TASK4_VALID_FILE = RAW_DATA_DIR / "ref-valid.jsonl"
+TASK4_TEST_FILE = RAW_DATA_DIR / "ref-test.jsonl"
+
 # 输出目录
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
 LEVEL1_OUTPUT = OUTPUT_DIR / "level1"
