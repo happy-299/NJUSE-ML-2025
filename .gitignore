@@ -29,4 +29,38 @@
 # 保留各目录中的 README.md（确保子目录的说明文件也被跟踪）
 !**/README.md
 
+# 忽略大文件和模型权重
+*.bin
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+pytorch_model.bin
+model.safetensors
+
+# 忽略 level3 的模型文件夹（已有模型）
+level3/codereviewer/pytorch_model.bin
+
+# 忽略原始数据集（太大）
+data/raw/
+
+# 忽略 Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# 忽略环境变量文件
+.env
+
+# 忽略输出文件（实验结果）
+outputs/**/*.json
+outputs/**/*.csv
+outputs/**/*.txt
+
+# 但保留 .gitkeep
+!**/.gitkeep
+
 # 说明：其他未在 README.md 中列出的文件（例如临时文件、虚拟环境、模型权重、大数据等）将被忽略。
