@@ -1,0 +1,117 @@
+# Code Issue Localization Task
+
+## Old Code (with line numbers)
+```{language}
+{old_code_numbered}
+```
+
+## Code Diff
+```diff
+{diff_code}
+```
+
+## New Code (with line numbers)
+```{language}
+{new_code_numbered}
+```
+
+## Review Comment
+```
+{comment}
+```
+
+---
+
+## Your Task
+Based on the review comment, identify which specific lines in the NEW code need to be modified.
+
+Consider:
+1. What is the reviewer pointing out?
+2. Which parts of the code change are problematic?
+3. What lines need to be fixed to address the comment?
+
+Provide your answer in the specified JSON format with:
+- `line_indices`: List of 0-based line numbers (in the NEW code)
+- `confidence`: Your confidence level
+- `reasoning`: Step-by-step explanation
+- `affected_code`: Brief description
+
+---
+
+# Few-shot Examples (for reference)
+
+## Example 1
+**Review Comment**: "Missing error handling for file operations"
+
+**Code Diff**:
+```diff
+@@ -1,3 +1,4 @@
+ def read_config():
+-    return json.load(open('config.json'))
++    f = open('config.json')
++    return json.load(f)
+```
+
+**Response**:
+```json
+{
+    "line_indices": [1, 2],
+    "confidence": 0.95,
+    "reasoning": "The reviewer points out missing error handling. Lines 1-2 (opening file and loading JSON) both need try-except blocks to handle potential IOError and JSONDecodeError.",
+    "affected_code": "File opening and JSON loading operations"
+}
+```
+
+## Example 2
+**Review Comment**: "Variable name 'x' is not descriptive"
+
+**Code Diff**:
+```diff
+@@ -1,3 +1,3 @@
+ def calculate(data):
+-    result = sum(data)
++    x = sum(data)
+     return x
+```
+
+**Response**:
+```json
+{
+    "line_indices": [1],
+    "confidence": 0.98,
+    "reasoning": "The reviewer critiques the variable name 'x' on line 1. This line needs to be changed to use a more descriptive name like 'total' or 'sum_result'.",
+    "affected_code": "Variable assignment for sum result"
+}
+```
+
+## Example 3
+**Review Comment**: "Should use context manager for database connection"
+
+**Code Diff**:
+```diff
+@@ -1,5 +1,7 @@
+ def query_db(sql):
+-    conn = create_connection()
+-    result = conn.execute(sql)
+-    conn.close()
++    conn = create_connection()
++    try:
++        result = conn.execute(sql)
++    finally:
++        conn.close()
+     return result
+```
+
+**Response**:
+```json
+{
+    "line_indices": [0, 1, 2, 3, 4],
+    "confidence": 0.90,
+    "reasoning": "The reviewer suggests using a context manager. The entire function body (lines 0-4) needs to be restructured to use 'with create_connection() as conn:' pattern.",
+    "affected_code": "Database connection and query execution logic"
+}
+```
+
+---
+
+Now analyze the code and review comment provided above.
