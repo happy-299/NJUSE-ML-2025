@@ -6,30 +6,15 @@
 
 ```
 task4_code_refinement/
-├── train.py         # 训练脚本
-├── test.py          # 测试脚本  
-├── inference.py     # 推理脚本
-├── experiment.py    # 完整实验脚本
-└── README.md        # 说明文档
+├── basic_code_refinement_experiment.py    # 基础代码修复实验
+└── README.md                              # 说明文档
 ```
 
 ## 🚀 快速使用
 
 ### 运行完整实验
 ```bash
-python experiment.py
-```
-
-### 单独运行
-```bash
-# 训练
-python train.py
-
-# 测试  
-python test.py
-
-# 推理
-python inference.py
+python basic_code_refinement_experiment.py
 ```
 
 ## 📊 评估指标
