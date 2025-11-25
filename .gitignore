@@ -102,3 +102,4 @@ Thumbs.db
 ehthumbs.db
 
 # 说明：根据 README.md 注意事项配置，避免提交大文件(数据集、模型权重)到 Git
+level1/checkpoints/
