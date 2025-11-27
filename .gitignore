@@ -41,6 +41,10 @@ model.safetensors
 # 忽略 level3 的模型文件夹（已有模型）
 level3/codereviewer/pytorch_model.bin
 
+outputs/level1/checkpoints/
+
+models/
+
 # 忽略原始数据集（太大）
 data/raw/
 

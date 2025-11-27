@@ -1,7 +1,7 @@
 """
-Level 2 Task 1: 代码质量评估 - 推理脚本
+Level 2 Task 1: Code Quality Estimation - Inference Script
 
-使用 LLM 和提示工程进行代码质量评估
+Using LLM and prompt engineering for code quality estimation
 """
 
 import os
@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from tqdm import tqdm
 
-# 添加路径
+# Add path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from level2.shared.llm_client import create_llm_client
@@ -23,18 +23,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def load_test_data(data_file):
-    """加载测试数据"""
+def load_test_data(data_file, max_samples=None):
+    """Load test data"""
     data = []
     with open(data_file, "r", encoding="utf-8") as f:
         for line in f:
             data.append(json.loads(line.strip()))
+            if max_samples and len(data) >= max_samples:
+                break
     return data
 
 
 def run_inference(args):
-    """运行推理"""
-    # 创建 LLM 客户端
+    """Run inference"""
+    # Create LLM client
     logger.info(f"Creating LLM client: {args.provider}/{args.model}")
     client = create_llm_client(
         provider=args.provider,
@@ -43,32 +45,31 @@ def run_inference(args):
         temperature=args.temperature,
     )
 
-    # 加载测试数据
+    # Load test data
     data_file = DIFF_QUALITY_DIR / "cls-test.jsonl"
     logger.info(f"Loading test data from {data_file}")
-    test_data = load_test_data(data_file)
-
-    if args.max_samples:
-        test_data = test_data[: args.max_samples]
+    test_data = load_test_data(data_file, args.max_samples)
 
     logger.info(f"Processing {len(test_data)} samples")
 
-    # 提示词文件路径
+    # Prompt file paths
     prompt_dir = Path(__file__).parent / "prompts"
     system_prompt_file = prompt_dir / "system_prompt.txt"
     task_prompt_file = prompt_dir / "task_prompt.txt"
 
-    # 推理
+    # Inference
     predictions = []
     failed_samples = []
 
     for idx, sample in enumerate(tqdm(test_data, desc="Inference")):
         try:
-            # 构建提示词
+            # Get correct fields from data (use 'patch' for diff, 'oldf' for old code)
             old_code = sample.get("oldf", "")
-            diff_code = sample.get("old_hunk", "")
+            diff_code = sample.get("patch", "") or sample.get("old_hunk", "")
             language = sample.get("lang", "code")
+            ground_truth = sample.get("y", sample.get("label", -1))
 
+            # Build prompt
             messages = build_quality_estimation_prompt(
                 old_code=old_code,
                 diff_code=diff_code,
@@ -77,23 +78,23 @@ def run_inference(args):
                 task_prompt_file=str(task_prompt_file),
             )
 
-            # 调用 LLM
+            # Call LLM
             response = client.chat_completion(
                 messages=messages,
                 temperature=args.temperature,
                 retry_attempts=args.retry_attempts,
             )
 
-            # 解析响应
+            # Parse response
             result = client.extract_json(response)
 
             if result and "needs_review" in result:
-                pred_label = result["needs_review"]
+                pred_label = int(result["needs_review"])
                 confidence = result.get("confidence", 0.0)
                 reasoning = result.get("reasoning", "")
             else:
-                # 解析失败,使用默认值
-                pred_label = 1  # 保守策略:默认需要评审
+                # Parse failed, use default value
+                pred_label = 1  # Conservative: default to needs review
                 confidence = 0.5
                 reasoning = "Failed to parse LLM response"
                 logger.warning(
@@ -103,11 +104,11 @@ def run_inference(args):
             predictions.append(
                 {
                     "idx": idx,
-                    "sample_id": sample.get("ids", [None])[0],
+                    "sample_id": sample.get("id", idx),
                     "prediction": pred_label,
                     "confidence": confidence,
                     "reasoning": reasoning,
-                    "ground_truth": sample.get("label", -1),
+                    "ground_truth": ground_truth,
                     "raw_response": response,
                 }
             )
@@ -118,16 +119,16 @@ def run_inference(args):
             predictions.append(
                 {
                     "idx": idx,
-                    "sample_id": sample.get("ids", [None])[0],
-                    "prediction": 1,  # 默认需要评审
+                    "sample_id": sample.get("id", idx),
+                    "prediction": 1,  # Default to needs review
                     "confidence": 0.0,
                     "reasoning": f"Error: {str(e)}",
-                    "ground_truth": sample.get("label", -1),
+                    "ground_truth": sample.get("y", sample.get("label", -1)),
                     "raw_response": "",
                 }
             )
 
-    # 保存结果
+    # Save results
     output_dir = LEVEL2_OUTPUT / "task1"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -145,17 +146,20 @@ def run_inference(args):
 def main():
     parser = argparse.ArgumentParser()
 
-    # LLM 参数
+    # LLM parameters
     parser.add_argument(
-        "--provider", type=str, default="openai", choices=["openai", "anthropic"]
+        "--provider",
+        type=str,
+        default="deepseek",
+        choices=["openai", "deepseek", "anthropic"],
     )
-    parser.add_argument("--model", type=str, default="gpt-4o-mini")
+    parser.add_argument("--model", type=str, default="deepseek-chat")
     parser.add_argument("--api_key", type=str, default=None)
     parser.add_argument("--temperature", type=float, default=0.7)
 
-    # 推理参数
+    # Inference parameters
     parser.add_argument(
-        "--max_samples", type=int, default=None, help="限制样本数量(用于测试)"
+        "--max_samples", type=int, default=100, help="Limit sample count (for testing)"
     )
     parser.add_argument("--retry_attempts", type=int, default=3)
     parser.add_argument("--output_file", type=str, default="predictions.json")
