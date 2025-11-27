@@ -137,12 +137,27 @@ class DataLoader:
         Returns:
             格式化的输入字典，包含参考答案用于评价指标计算
         """
+        # 语言名称标准化映射 (CodeBLEU 需要标准语言名称)
+        lang_mapping = {
+            "py": "python",
+            "js": "javascript",
+            "ts": "javascript",  # TypeScript 使用 JavaScript 解析
+            "cs": "c_sharp",
+            "c#": "c_sharp",
+            "cpp": "cpp",
+            "c++": "cpp",
+            "rb": "ruby",
+            "rs": "rust",
+        }
+        raw_lang = data_item.get("lang", "unknown").lower()
+        language = lang_mapping.get(raw_lang, raw_lang)
+
         if task_type == "refinement":
             return {
                 "old_code": data_item.get("oldf", ""),
                 "new_code": data_item.get("new", ""),
                 "diff": data_item.get("hunk", ""),
-                "language": data_item.get("lang", "unknown"),
+                "language": language,
                 "context": {
                     "repo": data_item.get("repo", ""),
                     "comment": data_item.get("comment", "")  # 参考答案
@@ -153,7 +168,7 @@ class DataLoader:
             return {
                 "code": data_item.get("oldf", ""),
                 "diff": data_item.get("patch", ""),
-                "language": data_item.get("lang", "unknown"),
+                "language": language,
                 "context": {
                     "project": data_item.get("proj", ""),
                     "expected_comment": data_item.get("msg", "")  # 参考答案
@@ -164,7 +179,7 @@ class DataLoader:
             return {
                 "code": data_item.get("oldf", ""),
                 "diff": data_item.get("patch", ""),
-                "language": data_item.get("lang", "unknown"),
+                "language": language,
                 "quality_label": data_item.get("y", 0),  # 参考标签
                 "context": {
                     "project": data_item.get("proj", ""),

@@ -470,84 +470,108 @@ def review_dataset_full_pipeline(task_type: str = "quality",
     print_metrics(metrics_task2, "refinement")
     save_metrics(metrics_task2, f"metrics_{split}", output_dir_task2)
 
-    # 任务三：评审意见生成（统计信息）
-    # 注意：quality数据集没有ground truth评审意见，只统计生成情况
-    review_stats = {
-        "total_samples":
-        len(results),
-        "generated_reviews":
-        sum(1 for r in results
-            if (r.get("result") or {}).get("review_comment")),
-        "avg_review_length":
-        sum(
-            len((r.get("result") or {}).get("review_comment") or "")
-            for r in results) / len(results) if results else 0,
-        "generation_rate":
-        sum(1 for r in results
-            if (r.get("result") or {}).get("review_comment")) / len(results) *
-        100 if results else 0,
-        "task":
-        "任务三：评审意见生成（统计）"
-    }
-    print(f"\n{'='*60}")
-    print(f"任务三：评审意见生成（统计）")
-    print(f"{'='*60}")
-    print(f"总样本数: {review_stats['total_samples']}")
-    print(f"成功生成: {review_stats['generated_reviews']}")
-    print(f"生成率: {review_stats['generation_rate']:.1f}%")
-    print(f"平均长度: {review_stats['avg_review_length']:.1f} 字符")
-    print(f"{'='*60}\n")
-
-    # 保存到 task3 目录
+    # 任务三：评审意见生成
+    # 尝试使用标准评估指标 (BLEU-4, ROUGE-L, BERTScore)
     output_dir_task3 = output_dir / "task3"
     output_dir_task3.mkdir(parents=True, exist_ok=True)
-    save_metrics(review_stats, f"metrics_{split}", output_dir_task3)
 
-    # 任务四：代码修复（统计信息）
-    # 注意：quality数据集没有ground truth修复代码，只统计生成情况
-    fixing_stats = {
-        "total_samples":
-        len(results),
-        "generated_fixes":
-        sum(1 for r in results if (r.get("result") or {}).get("fixed_code")),
-        "verified_fixes":
-        sum(1 for r in results
-            if ((r.get("result") or {}).get("task4_output") or {}
-                ).get("verified", False)),
-        "avg_fixed_length":
-        sum(
-            len((r.get("result") or {}).get("fixed_code") or "")
-            for r in results) / len(results) if results else 0,
-        "generation_rate":
-        sum(1 for r in results if (r.get("result") or {}).get("fixed_code")) /
-        len(results) * 100 if results else 0,
-        "verification_rate":
-        sum(1 for r in results if ((r.get("result") or {}).get("task4_output")
-                                   or {}).get("verified", False)) /
-        len(results) * 100 if results else 0,
-        "avg_retry_count":
-        sum(((r.get("result") or {}).get("task4_output") or {}
-             ).get("retry_count", 0)
-            for r in results) / len(results) if results else 0,
-        "task":
-        "任务四：代码修复（统计）"
-    }
-    print(f"\n{'='*60}")
-    print(f"任务四：代码修复（统计）")
-    print(f"{'='*60}")
-    print(f"总样本数: {fixing_stats['total_samples']}")
-    print(f"成功生成: {fixing_stats['generated_fixes']}")
-    print(f"通过验证: {fixing_stats['verified_fixes']}")
-    print(f"生成率: {fixing_stats['generation_rate']:.1f}%")
-    print(f"验证率: {fixing_stats['verification_rate']:.1f}%")
-    print(f"平均长度: {fixing_stats['avg_fixed_length']:.1f} 字符")
-    print(f"平均重试: {fixing_stats['avg_retry_count']:.2f} 次")
-    print(f"{'='*60}\n")
+    # 检查是否有 ground truth 评审意见
+    metrics_task3 = calc_metrics(results, "comment")
 
-    # 保存到 task4 目录
+    if "error" not in metrics_task3:
+        # 有 ground truth，使用标准指标
+        print_metrics(metrics_task3, "comment")
+        save_metrics(metrics_task3, f"metrics_{split}", output_dir_task3)
+        review_stats = metrics_task3
+    else:
+        # 没有 ground truth，只统计生成情况
+        review_stats = {
+            "total_samples":
+            len(results),
+            "generated_reviews":
+            sum(1 for r in results
+                if (r.get("result") or {}).get("review_comment")),
+            "avg_review_length":
+            sum(
+                len((r.get("result") or {}).get("review_comment") or "")
+                for r in results) / len(results) if results else 0,
+            "generation_rate":
+            sum(1 for r in results
+                if (r.get("result") or {}).get("review_comment")) /
+            len(results) * 100 if results else 0,
+            "note":
+            "无 ground truth，仅统计生成情况",
+            "task":
+            "任务三：评审意见生成（统计）"
+        }
+        print(f"\n{'='*60}")
+        print(f"任务三：评审意见生成（统计 - 无ground truth）")
+        print(f"{'='*60}")
+        print(f"总样本数: {review_stats['total_samples']}")
+        print(f"成功生成: {review_stats['generated_reviews']}")
+        print(f"生成率: {review_stats['generation_rate']:.1f}%")
+        print(f"平均长度: {review_stats['avg_review_length']:.1f} 字符")
+        print(f"{'='*60}\n")
+        save_metrics(review_stats, f"metrics_{split}", output_dir_task3)
+
+    # 任务四：代码修复
+    # 尝试使用标准评估指标 (Exact Match, CodeBLEU)
     output_dir_task4 = output_dir / "task4"
     output_dir_task4.mkdir(parents=True, exist_ok=True)
-    save_metrics(fixing_stats, f"metrics_{split}", output_dir_task4)
+
+    # 检查是否有 ground truth 修复代码
+    metrics_task4 = calc_metrics(results, "refinement")
+
+    if "error" not in metrics_task4:
+        # 有 ground truth，使用标准指标
+        print_metrics(metrics_task4, "refinement")
+        save_metrics(metrics_task4, f"metrics_{split}", output_dir_task4)
+        fixing_stats = metrics_task4
+    else:
+        # 没有 ground truth，只统计生成情况
+        fixing_stats = {
+            "total_samples":
+            len(results),
+            "generated_fixes":
+            sum(1 for r in results
+                if (r.get("result") or {}).get("fixed_code")),
+            "verified_fixes":
+            sum(1 for r in results
+                if ((r.get("result") or {}).get("task4_output") or {}
+                    ).get("verified", False)),
+            "avg_fixed_length":
+            sum(
+                len((r.get("result") or {}).get("fixed_code") or "")
+                for r in results) / len(results) if results else 0,
+            "generation_rate":
+            sum(1 for r in results
+                if (r.get("result") or {}).get("fixed_code")) / len(results) *
+            100 if results else 0,
+            "verification_rate":
+            sum(1 for r in results if (
+                (r.get("result") or {}).get("task4_output") or {}
+            ).get("verified", False)) / len(results) * 100 if results else 0,
+            "avg_retry_count":
+            sum(((r.get("result") or {}).get("task4_output") or {}
+                 ).get("retry_count", 0)
+                for r in results) / len(results) if results else 0,
+            "note":
+            "无 ground truth，仅统计生成情况",
+            "task":
+            "任务四：代码修复（统计）"
+        }
+        print(f"\n{'='*60}")
+        print(f"任务四：代码修复（统计 - 无ground truth）")
+        print(f"{'='*60}")
+        print(f"总样本数: {fixing_stats['total_samples']}")
+        print(f"成功生成: {fixing_stats['generated_fixes']}")
+        print(f"通过验证: {fixing_stats['verified_fixes']}")
+        print(f"生成率: {fixing_stats['generation_rate']:.1f}%")
+        print(f"验证率: {fixing_stats['verification_rate']:.1f}%")
+        print(f"平均长度: {fixing_stats['avg_fixed_length']:.1f} 字符")
+        print(f"平均重试: {fixing_stats['avg_retry_count']:.2f} 次")
+        print(f"{'='*60}\n")
+        save_metrics(fixing_stats, f"metrics_{split}", output_dir_task4)
 
     # 保存综合指标到 all 目录
     from datetime import datetime
@@ -647,6 +671,14 @@ def main():
                         action='store_true',
                         help='使用完整四任务端到端流程（等同于 --dataset all）')
 
+    parser.add_argument(
+        '--source-dataset',
+        type=str,
+        choices=['quality', 'comment', 'refinement'],
+        default='refinement',
+        help='完整流程的数据源: quality(有任务一标签), comment(有任务三标签), refinement(有任务四标签，默认)'
+    )
+
     parser.add_argument('--stats', action='store_true', help='显示数据集统计信息')
 
     parser.add_argument('--config', type=str, help='配置文件路径 (默认: lab3/.env)')
@@ -689,7 +721,9 @@ def main():
         elif args.dataset:
             # 处理完整流程
             if args.full_pipeline or args.dataset == 'all':
-                task_type = 'quality'  # 完整流程使用 quality 数据集
+                # 使用 --source-dataset 指定的数据源，默认 refinement (有任务四标签)
+                task_type = args.source_dataset if hasattr(
+                    args, 'source_dataset') else 'refinement'
                 review_dataset_full_pipeline(task_type, args.limit, args.split)
             else:
                 # 单任务执行

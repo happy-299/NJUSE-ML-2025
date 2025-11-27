@@ -114,7 +114,9 @@ def evaluate_code_refinement(predictions: List[str],
     Returns:
         包含各指标的字典
     """
-    return evaluate_task4(predictions, references, lang=lang)
+    # 为每个样本创建语言列表，以匹配 evaluate_task4 的接口
+    languages = [lang] * len(predictions) if predictions else None
+    return evaluate_task4(predictions, references, languages=languages)
 
 
 def evaluate_all_tasks(task: str, predictions: Any, references: Any,
@@ -225,9 +227,11 @@ def calculate_metrics(results: List[Dict], task_type: str) -> Dict[str, Any]:
             else:
                 pred = str(result) if result else ""
 
-            # 获取参考答案
-            ref = input_data.get("comment",
-                                 input_data.get("review_comment", ""))
+            # 获取参考答案 - 从 context.expected_comment 或 comment 获取
+            context = input_data.get("context", {})
+            ref = context.get("expected_comment", "") or context.get(
+                "comment", "") or input_data.get(
+                    "comment", "") or input_data.get("review_comment", "")
 
             if pred and ref:
                 predictions.append(pred)
@@ -246,29 +250,34 @@ def calculate_metrics(results: List[Dict], task_type: str) -> Dict[str, Any]:
         # 任务四：Code Refinement
         predictions = []
         references = []
+        lang = "python"  # 默认语言
 
         for r in results:
             result = r.get("result", {})
             input_data = r.get("input", {})
 
-            # 获取生成的代码
+            # 获取生成的代码 (Agent 生成的修复代码)
             if isinstance(result, dict):
-                pred = result.get("fixed_code", result.get("new_code", ""))
+                pred = result.get("fixed_code", "") or result.get(
+                    "new_code", "")
             else:
                 pred = str(result) if result else ""
 
-            # 获取参考代码
-            ref = input_data.get("new_code", input_data.get("fixed_code", ""))
+            # 获取参考代码 - 优先从 new_code 获取 (refinement 数据集的真实修改后代码)
+            ref = input_data.get("new_code", "") or input_data.get(
+                "fixed_code", "")
 
-            if pred and ref:
-                predictions.append(pred)
+            # 获取语言
+            lang = input_data.get("language", "python")
+
+            # 只有当 Agent 生成了代码时才进行评估
+            # 注意：即使生成的代码为空，如果有参考答案也应该记录（会得到 0 分）
+            if ref:  # 只要有参考答案就可以评估
+                predictions.append(pred if pred else "")
                 references.append(ref)
 
         if not predictions:
             return {"error": "No valid samples for code refinement evaluation"}
-
-        # 检测语言
-        lang = input_data.get("language", "python") if input_data else "python"
 
         return evaluate_code_refinement(predictions, references, lang=lang)
 
@@ -304,19 +313,27 @@ def print_metrics(metrics: Dict[str, Any], task_type: str) -> None:
         print(f"Accuracy:  {metrics.get('accuracy', 0):.4f}")
         print(f"Precision: {metrics.get('precision', 0):.4f}")
         print(f"Recall:    {metrics.get('recall', 0):.4f}")
-        print(f"F1-Score:  {metrics.get('f1', 0):.4f}")
+        print(
+            f"F1-Score:  {metrics.get('f1', metrics.get('f1_macro', 0)):.4f}")
 
     elif task_type == "comment":
         # 任务三指标：BLEU-4, ROUGE-L, BERTScore
-        print(f"BLEU-4:    {metrics.get('bleu', 0):.4f}")
-        print(f"ROUGE-L:   {metrics.get('rouge_l', 0):.4f}")
-        if 'bert_score' in metrics:
-            print(f"BERTScore: {metrics.get('bert_score', 0):.4f}")
+        bleu = metrics.get('bleu4', metrics.get('bleu', 0))
+        rouge = metrics.get('rouge_l', 0)
+        bert = metrics.get('bert_score_f1', metrics.get('bert_score', 0))
+
+        print(f"BLEU-4:    {bleu:.4f}")
+        print(f"ROUGE-L:   {rouge:.4f}")
+        if bert > 0:
+            print(f"BERTScore: {bert:.4f}")
 
     elif task_type == "refinement":
         # 任务四指标：Exact Match, CodeBLEU
-        print(f"Exact Match: {metrics.get('exact_match', 0):.4f}")
-        print(f"CodeBLEU:    {metrics.get('code_bleu', 0):.4f}")
+        em = metrics.get('exact_match', 0)
+        codebleu = metrics.get('codebleu', metrics.get('code_bleu', 0))
+
+        print(f"Exact Match: {em:.4f}")
+        print(f"CodeBLEU:    {codebleu:.4f}")
 
     else:
         # 通用打印
