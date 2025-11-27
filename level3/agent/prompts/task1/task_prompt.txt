@@ -1,0 +1,108 @@
+# Code Change Analysis
+
+## Old File Content
+```{language}
+{old_code}
+```
+
+## Code Diff
+```diff
+{diff_code}
+```
+
+## Question
+Analyze this code change and determine if it needs human review.
+
+Consider:
+1. What changes were made?
+2. Are there any obvious issues or bugs?
+3. Does this change affect critical functionality?
+4. Is the code quality acceptable?
+
+Provide your analysis in the specified JSON format.
+
+---
+
+# Few-shot Examples (for reference)
+
+## Example 1: Needs Review
+Old Code:
+```python
+def calculate_total(prices):
+    total = 0
+    for price in prices:
+        total += price
+    return total
+```
+
+Diff:
+```diff
+-    total = 0
++    total = 1
+```
+
+Response:
+```json
+{
+    "needs_review": 1,
+    "confidence": 0.95,
+    "reasoning": "The change modifies the initial value of 'total' from 0 to 1, which is likely a bug. This will cause incorrect calculation results.",
+    "issues": ["Logic error: initial value changed from 0 to 1", "Will cause all totals to be off by 1"]
+}
+```
+
+## Example 2: No Review Needed
+Old Code:
+```python
+def greet(name):
+    # Say hello to user
+    print(f"Hello, {name}!")
+```
+
+Diff:
+```diff
+-    # Say hello to user
++    # Greet the user with a friendly message
+```
+
+Response:
+```json
+{
+    "needs_review": 0,
+    "confidence": 0.99,
+    "reasoning": "This is a simple comment improvement with no functional changes. The updated comment is more descriptive.",
+    "issues": []
+}
+```
+
+## Example 3: Needs Review (Missing Error Handling)
+Old Code:
+```python
+def read_file(filename):
+    with open(filename, 'r') as f:
+        return f.read()
+```
+
+Diff:
+```diff
+ def read_file(filename):
+-    with open(filename, 'r') as f:
+-        return f.read()
++    f = open(filename, 'r')
++    content = f.read()
++    return content
+```
+
+Response:
+```json
+{
+    "needs_review": 1,
+    "confidence": 0.90,
+    "reasoning": "The change removes the 'with' statement, which means the file is no longer automatically closed. This is a resource leak and should be reviewed.",
+    "issues": ["Resource leak: file not properly closed", "Missing context manager", "Potential file descriptor exhaustion"]
+}
+```
+
+---
+
+Now analyze the code change provided above.
