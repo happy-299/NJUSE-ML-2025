@@ -1,8 +1,8 @@
 """
-Level 1 Task 1: 代码质量评估 - 训练脚本
+Level 1 Task 1: Code Quality Estimation - Training Script
 
-基于 CodeReviewer 模型训练代码质量评估(二分类)模型
-改编自: https://github.com/microsoft/CodeBERT/tree/master/CodeReviewer
+Train a binary classification model based on CodeReviewer
+Adapted from: https://github.com/microsoft/CodeBERT/tree/master/CodeReviewer
 """
 
 import os
@@ -12,7 +12,7 @@ import logging
 import random
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, SequentialSampler, RandomSampler
+from torch.utils.data import DataLoader, SequentialSampler, RandomSampler, Dataset
 from torch.optim import AdamW
 from transformers import (
     RobertaConfig,
@@ -22,17 +22,16 @@ from transformers import (
 from tqdm import tqdm
 import json
 
-# 添加项目根目录到路径
+# Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-# 导入 CodeReviewer 相关模块
+# Import CodeReviewer modules
 codereviewer_path = os.path.abspath("../../../CodeBERT-master/CodeReviewer/code")
 sys.path.append(codereviewer_path)
 
 from models import build_or_load_gen_model
-from utils import CommentClsDataset, ReviewExample
 
-# 导入项目配置
+# Import project config
 from config import (
     DIFF_QUALITY_DIR,
     LEVEL1_CHECKPOINT_DIR,
@@ -50,8 +49,73 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class SimpleClsDataset(Dataset):
+    """Simple classification dataset, memory efficient"""
+
+    def __init__(self, file_paths, tokenizer, max_length=512, samplenum=-1):
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.examples = []
+
+        for file_path in file_paths:
+            if not os.path.exists(file_path):
+                logger.warning(f"File not found: {file_path}")
+                continue
+
+            logger.info(f"Reading {file_path}")
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        data = json.loads(line.strip())
+                        # Use 'patch' as input (contains diff info), 'y' as label
+                        input_text = data.get("patch", "") or data.get("oldf", "")
+                        label = int(data.get("y", data.get("label", 0)))
+                        self.examples.append(
+                            {
+                                "input": input_text,
+                                "label": label,
+                            }
+                        )
+                    except json.JSONDecodeError:
+                        continue
+
+                    if samplenum > 0 and len(self.examples) >= samplenum:
+                        break
+
+            if samplenum > 0 and len(self.examples) >= samplenum:
+                break
+
+        logger.info(f"Loaded {len(self.examples)} examples")
+        # Log label distribution to verify data correctness
+        label_counts = {}
+        for ex in self.examples:
+            label_counts[ex["label"]] = label_counts.get(ex["label"], 0) + 1
+        logger.info(f"Label distribution: {label_counts}")
+
+    def __len__(self):
+        return len(self.examples)
+
+    def __getitem__(self, idx):
+        example = self.examples[idx]
+
+        # Encode input
+        encoded = self.tokenizer(
+            example["input"],
+            max_length=self.max_length,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt",
+        )
+
+        return (
+            encoded["input_ids"].squeeze(0),
+            encoded["attention_mask"].squeeze(0),
+            torch.tensor(example["label"], dtype=torch.long),
+        )
+
+
 def set_seed(seed=42):
-    """设置随机种子"""
+    """Set random seed"""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -59,90 +123,70 @@ def set_seed(seed=42):
         torch.cuda.manual_seed_all(seed)
 
 
-def load_data(data_dir, tokenizer, max_source_length, split="train"):
-    """加载数据集"""
+def load_data(data_dir, tokenizer, args, split="train"):
+    """Load dataset"""
     logger.info(f"Loading {split} data from {data_dir}")
 
-    examples = []
-
+    # Prepare file paths
     if split == "train":
-        # 训练集有多个文件
-        data_files = [
-            data_dir / "cls-train-chunk-0.jsonl",
-            data_dir / "cls-train-chunk-1.jsonl",
-            data_dir / "cls-train-chunk-2.jsonl",
-            data_dir / "cls-train-chunk-3.jsonl",
-        ]
+        file_paths = []
+        for i in range(4):
+            file_path = data_dir / f"cls-train-chunk-{i}.jsonl"
+            if file_path.exists():
+                file_paths.append(str(file_path))
+        if not file_paths:
+            raise FileNotFoundError(f"No training data files found in {data_dir}")
     elif split == "valid":
-        data_files = [data_dir / "cls-valid.jsonl"]
+        file_paths = [str(data_dir / "cls-valid.jsonl")]
     elif split == "test":
-        data_files = [data_dir / "cls-test.jsonl"]
+        file_paths = [str(data_dir / "cls-test.jsonl")]
     else:
         raise ValueError(f"Unknown split: {split}")
 
-    for data_file in data_files:
-        if not data_file.exists():
-            logger.warning(f"Data file not found: {data_file}")
-            continue
+    # Use lightweight custom dataset
+    # Determine sample count based on split
+    if split == "train":
+        samplenum = getattr(args, "sample_num", -1)
+    elif split == "valid":
+        samplenum = getattr(args, "valid_sample_num", -1)
+    else:
+        samplenum = getattr(args, "sample_num", -1)
 
-        with open(data_file, "r", encoding="utf-8") as f:
-            for idx, line in enumerate(f):
-                data = json.loads(line.strip())
-
-                # 构造 ReviewExample
-                example = ReviewExample(
-                    idx=f"{data_file.stem}_{idx}",
-                    old_code=data.get("oldf", ""),
-                    old_comment="",
-                    diff_code=data.get("old_hunk", ""),
-                    new_code="",
-                    new_comment="",
-                    label=data.get("label", 0),
-                )
-                examples.append(example)
-
-    logger.info(f"Loaded {len(examples)} examples from {split} set")
-
-    # 创建数据集
-    dataset = CommentClsDataset(
-        examples=examples,
+    dataset = SimpleClsDataset(
+        file_paths=file_paths,
         tokenizer=tokenizer,
-        args=argparse.Namespace(max_source_length=max_source_length),
+        max_length=args.max_source_length,
+        samplenum=samplenum,
     )
 
     return dataset
 
 
 def train(args):
-    """训练模型"""
-    # 设置随机种子
+    """Train model"""
+    # Set random seed
     set_seed(args.seed)
 
-    # 创建输出目录
+    # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # 加载 tokenizer 和模型 (使用 CodeReviewer 提供的加载函数)
+    # Load tokenizer and model using CodeReviewer's loader
     logger.info(f"Loading model from {args.model_name_or_path}")
-    # models.build_or_load_gen_model 会返回 (config, model, tokenizer)
     config, model, tokenizer = build_or_load_gen_model(args)
 
     model.to(DEVICE)
 
-    # 加载数据
-    train_dataset = load_data(
-        DIFF_QUALITY_DIR, tokenizer, args.max_source_length, split="train"
-    )
-    valid_dataset = load_data(
-        DIFF_QUALITY_DIR, tokenizer, args.max_source_length, split="valid"
-    )
+    # Load data
+    train_dataset = load_data(DIFF_QUALITY_DIR, tokenizer, args, split="train")
+    valid_dataset = load_data(DIFF_QUALITY_DIR, tokenizer, args, split="valid")
 
-    # 创建 DataLoader
+    # Create DataLoader
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(
         train_dataset, sampler=train_sampler, batch_size=args.batch_size
     )
 
-    # 优化器和学习率调度
+    # Optimizer and learning rate scheduler
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
@@ -174,7 +218,7 @@ def train(args):
         num_training_steps=num_training_steps,
     )
 
-    # 训练循环
+    # Training loop
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
     logger.info(f"  Num epochs = {args.num_epochs}")
@@ -192,18 +236,20 @@ def train(args):
 
         pbar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}/{args.num_epochs}")
         for step, batch in enumerate(pbar):
-            # 将数据移到设备
+            # Move data to device
             input_ids = batch[0].to(DEVICE)
             attention_mask = batch[1].to(DEVICE)
             labels = batch[2].to(DEVICE)
 
-            # 前向传播
-            outputs = model(
-                input_ids=input_ids, attention_mask=attention_mask, labels=labels
+            # Forward pass (use cls=True for classification)
+            loss = model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                labels=labels,
+                cls=True,
             )
-            loss = outputs.loss
 
-            # 反向传播
+            # Backward pass
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
 
@@ -219,12 +265,12 @@ def train(args):
 
                 pbar.set_postfix({"loss": tr_loss / (step + 1)})
 
-                # 定期验证
+                # Periodic validation
                 if global_step % args.save_steps == 0:
                     val_acc = evaluate(model, valid_dataset, args)
                     logger.info(f"Step {global_step}: Val Accuracy = {val_acc:.4f}")
 
-                    # 保存最佳模型
+                    # Save best model
                     if val_acc > best_acc:
                         best_acc = val_acc
                         output_dir = os.path.join(args.output_dir, f"checkpoint-best")
@@ -232,19 +278,47 @@ def train(args):
 
                         model.save_pretrained(output_dir)
                         tokenizer.save_pretrained(output_dir)
+                        # Save training state for resume
+                        torch.save(
+                            {
+                                "epoch": epoch,
+                                "global_step": global_step,
+                                "best_acc": best_acc,
+                                "optimizer_state_dict": optimizer.state_dict(),
+                                "scheduler_state_dict": scheduler.state_dict(),
+                            },
+                            os.path.join(output_dir, "training_state.pt"),
+                        )
                         logger.info(f"Saved best model to {output_dir}")
 
                     model.train()
 
-        # 每个 epoch 后验证
+        # Validate after each epoch
         val_acc = evaluate(model, valid_dataset, args)
         logger.info(f"Epoch {epoch+1}: Val Accuracy = {val_acc:.4f}")
+
+        # Save checkpoint after each epoch (for resume)
+        epoch_dir = os.path.join(args.output_dir, f"checkpoint-epoch-{epoch+1}")
+        os.makedirs(epoch_dir, exist_ok=True)
+        model.save_pretrained(epoch_dir)
+        tokenizer.save_pretrained(epoch_dir)
+        torch.save(
+            {
+                "epoch": epoch,
+                "global_step": global_step,
+                "best_acc": best_acc,
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+            },
+            os.path.join(epoch_dir, "training_state.pt"),
+        )
+        logger.info(f"Saved epoch {epoch+1} checkpoint to {epoch_dir}")
 
     logger.info(f"Training completed. Best Val Accuracy = {best_acc:.4f}")
 
 
 def evaluate(model, dataset, args):
-    """评估模型"""
+    """Evaluate model"""
     model.eval()
 
     sampler = SequentialSampler(dataset)
@@ -259,14 +333,16 @@ def evaluate(model, dataset, args):
             attention_mask = batch[1].to(DEVICE)
             labels = batch[2].to(DEVICE)
 
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
-            logits = outputs.logits
+            # Call cls method directly with labels=None to get logits
+            logits = model.cls(
+                input_ids=input_ids, attention_mask=attention_mask, labels=None
+            )
             preds = torch.argmax(logits, dim=-1)
 
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
 
-    # 计算准确率
+    # Calculate accuracy
     accuracy = np.mean(np.array(all_preds) == np.array(all_labels))
 
     return accuracy
@@ -275,30 +351,33 @@ def evaluate(model, dataset, args):
 def main():
     parser = argparse.ArgumentParser()
 
-    # 路径参数
+    # Path arguments
     parser.add_argument(
         "--model_name_or_path",
         type=str,
         default=CODEREVIEWER_MODEL_NAME,
-        help="预训练模型名称或路径",
+        help="Pretrained model name or path",
     )
     parser.add_argument(
         "--load_model_path",
         type=str,
         default=None,
-        help="可选: 已保存的模型路径 (用于加载 fine-tuned 模型)",
+        help="Optional: Saved model path (for loading fine-tuned model)",
     )
     parser.add_argument(
         "--output_dir",
         type=str,
         default=str(LEVEL1_CHECKPOINT_DIR / "task1"),
-        help="模型输出目录",
+        help="Model output directory",
     )
     parser.add_argument(
-        "--local_rank", type=int, default=0, help="本地进程索引 (用于分布式训练)"
+        "--local_rank",
+        type=int,
+        default=0,
+        help="Local process index (for distributed training)",
     )
 
-    # 训练参数
+    # Training arguments
     parser.add_argument(
         "--batch_size", type=int, default=LEVEL1_TRAIN_CONFIG["batch_size"]
     )
@@ -324,8 +403,22 @@ def main():
     )
     parser.add_argument("--seed", type=int, default=LEVEL1_TRAIN_CONFIG["seed"])
 
-    # 模型参数
+    # Model arguments
     parser.add_argument("--max_source_length", type=int, default=512)
+
+    # Sampling arguments (for quick testing)
+    parser.add_argument(
+        "--sample_num",
+        type=int,
+        default=-1,
+        help="Training sample count, -1 means use all data. Set small value (e.g., 5000) for faster training",
+    )
+    parser.add_argument(
+        "--valid_sample_num",
+        type=int,
+        default=-1,
+        help="Validation sample count, -1 means use all data. Set small value to speed up validation",
+    )
 
     args = parser.parse_args()
 

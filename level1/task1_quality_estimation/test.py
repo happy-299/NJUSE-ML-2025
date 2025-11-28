@@ -1,7 +1,7 @@
 """
-Level 1 Task 1: 代码质量评估 - 测试脚本
+Level 1 Task 1: Code Quality Estimation - Test Script
 
-在测试集上评估训练好的模型
+Evaluate trained model on test set
 """
 
 import os
@@ -16,13 +16,13 @@ from tqdm import tqdm
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 import json
 
-# 添加路径
+# Add path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 codereviewer_path = os.path.abspath("../../../CodeBERT-master/CodeReviewer/code")
 sys.path.append(codereviewer_path)
 
-from models import ClassificationModel
-from train import load_data, set_seed
+from models import ReviewerModel
+from train import set_seed, SimpleClsDataset
 
 from config import DIFF_QUALITY_DIR, LEVEL1_CHECKPOINT_DIR, LEVEL1_OUTPUT, DEVICE
 
@@ -30,28 +30,48 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def load_test_data(data_dir, tokenizer, max_length, sample_num=-1):
+    """Load test dataset"""
+    logger.info(f"Loading test data from {data_dir}")
+
+    file_path = str(data_dir / "cls-test.jsonl")
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Test data file not found: {file_path}")
+
+    # Use lightweight dataset
+    dataset = SimpleClsDataset(
+        file_paths=[file_path],
+        tokenizer=tokenizer,
+        max_length=max_length,
+        samplenum=sample_num,
+    )
+
+    logger.info(f"Loaded {len(dataset)} test examples")
+    return dataset
+
+
 def test(args):
-    """测试模型"""
-    # 设置随机种子
+    """Test model"""
+    # Set random seed
     set_seed(args.seed)
 
-    # 加载模型和 tokenizer
+    # Load model and tokenizer
     logger.info(f"Loading model from {args.model_path}")
     tokenizer = RobertaTokenizer.from_pretrained(args.model_path)
-    model = ClassificationModel.from_pretrained(args.model_path)
+    model = ReviewerModel.from_pretrained(args.model_path)
     model.to(DEVICE)
     model.eval()
 
-    # 加载测试数据
-    test_dataset = load_data(
-        DIFF_QUALITY_DIR, tokenizer, args.max_source_length, split="test"
+    # Load test data
+    test_dataset = load_test_data(
+        DIFF_QUALITY_DIR, tokenizer, args.max_source_length, args.sample_num
     )
 
-    # 创建 DataLoader
+    # Create DataLoader
     sampler = SequentialSampler(test_dataset)
     dataloader = DataLoader(test_dataset, sampler=sampler, batch_size=args.batch_size)
 
-    # 推理
+    # Inference
     logger.info("***** Running testing *****")
     logger.info(f"  Num examples = {len(test_dataset)}")
     logger.info(f"  Batch size = {args.batch_size}")
@@ -66,8 +86,10 @@ def test(args):
             attention_mask = batch[1].to(DEVICE)
             labels = batch[2].to(DEVICE)
 
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
-            logits = outputs.logits
+            # Use cls method directly to get logits (without labels)
+            logits = model.cls(
+                input_ids=input_ids, attention_mask=attention_mask, labels=None
+            )
             probs = torch.softmax(logits, dim=-1)
             preds = torch.argmax(logits, dim=-1)
 
@@ -75,7 +97,7 @@ def test(args):
             all_labels.extend(labels.cpu().numpy())
             all_probs.extend(probs.cpu().numpy())
 
-    # 计算指标
+    # Calculate metrics
     accuracy = accuracy_score(all_labels, all_preds)
     precision, recall, f1, _ = precision_recall_fscore_support(
         all_labels, all_preds, average="macro"
@@ -92,7 +114,7 @@ def test(args):
     for key, value in results.items():
         logger.info(f"  {key} = {value:.4f}")
 
-    # 保存结果
+    # Save results
     output_dir = LEVEL1_OUTPUT / "task1"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -112,11 +134,14 @@ def main():
         "--model_path",
         type=str,
         default=str(LEVEL1_CHECKPOINT_DIR / "task1" / "checkpoint-best"),
-        help="训练好的模型路径",
+        help="Trained model path",
     )
-    parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--max_source_length", type=int, default=512)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--max_source_length", type=int, default=256)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--sample_num", type=int, default=-1, help="Test sample count, -1 for all"
+    )
 
     args = parser.parse_args()
 

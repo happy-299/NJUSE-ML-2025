@@ -1,7 +1,7 @@
 """
-Level 2 共享模块: LLM 客户端封装
+Level 2 Shared Module: LLM Client Wrapper
 
-支持多种 LLM API (OpenAI, Anthropic, 等)
+Support multiple LLM APIs (OpenAI, DeepSeek, Anthropic, etc.)
 """
 
 import os
@@ -9,23 +9,31 @@ import time
 import json
 import logging
 from typing import Dict, List, Optional
-import openai
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
 
 class LLMClient:
-    """LLM API 客户端封装"""
+    """LLM API Client Wrapper"""
 
-    def __init__(self, provider="openai", model="gpt-4o-mini", api_key=None, **kwargs):
+    def __init__(
+        self,
+        provider="deepseek",
+        model="deepseek-chat",
+        api_key=None,
+        base_url=None,
+        **kwargs,
+    ):
         """
-        初始化 LLM 客户端
+        Initialize LLM client
 
         Args:
-            provider: API 提供商 ("openai", "anthropic", 等)
-            model: 模型名称
-            api_key: API 密钥
-            **kwargs: 其他参数 (temperature, max_tokens, 等)
+            provider: API provider ("openai", "deepseek", "anthropic", etc.)
+            model: Model name
+            api_key: API key
+            base_url: API base URL (for custom endpoints like DeepSeek)
+            **kwargs: Other parameters (temperature, max_tokens, etc.)
         """
         self.provider = provider
         self.model = model
@@ -35,10 +43,13 @@ class LLMClient:
         if not self.api_key:
             raise ValueError(f"API key not found for provider: {provider}")
 
-        # 初始化客户端
-        if provider == "openai":
-            openai.api_key = self.api_key
-            self.client = openai.OpenAI(api_key=self.api_key)
+        # Initialize client based on provider
+        if provider == "deepseek":
+            self.client = OpenAI(
+                api_key=self.api_key, base_url=base_url or "https://api.deepseek.com"
+            )
+        elif provider == "openai":
+            self.client = OpenAI(api_key=self.api_key)
         elif provider == "anthropic":
             try:
                 import anthropic
@@ -58,35 +69,36 @@ class LLMClient:
         retry_delay: int = 2,
     ) -> str:
         """
-        调用聊天补全 API
+        Call chat completion API
 
         Args:
-            messages: 消息列表,格式 [{"role": "user/assistant/system", "content": "..."}]
-            temperature: 温度参数
-            max_tokens: 最大 token 数
-            retry_attempts: 重试次数
-            retry_delay: 重试延迟(秒)
+            messages: Message list, format [{"role": "user/assistant/system", "content": "..."}]
+            temperature: Temperature parameter
+            max_tokens: Max tokens
+            retry_attempts: Retry attempts
+            retry_delay: Retry delay (seconds)
 
         Returns:
-            LLM 响应文本
+            LLM response text
         """
         temperature = temperature or self.config.get("temperature", 0.7)
         max_tokens = max_tokens or self.config.get("max_tokens", 2048)
 
         for attempt in range(retry_attempts):
             try:
-                if self.provider == "openai":
+                if self.provider in ["openai", "deepseek"]:
+                    # Both OpenAI and DeepSeek use the same API format
                     response = self.client.chat.completions.create(
                         model=self.model,
                         messages=messages,
                         temperature=temperature,
                         max_tokens=max_tokens,
-                        top_p=self.config.get("top_p", 1.0),
+                        stream=False,
                     )
                     return response.choices[0].message.content
 
                 elif self.provider == "anthropic":
-                    # 将 messages 转换为 Anthropic 格式
+                    # Convert messages to Anthropic format
                     system_msg = next(
                         (m["content"] for m in messages if m["role"] == "system"), ""
                     )
@@ -150,35 +162,47 @@ class LLMClient:
         return None
 
 
-def create_llm_client(provider=None, model=None, api_key=None, **kwargs):
+def create_llm_client(provider=None, model=None, api_key=None, base_url=None, **kwargs):
     """
-    创建 LLM 客户端的工厂函数
+    Factory function to create LLM client
 
     Args:
-        provider: API 提供商
-        model: 模型名称
-        api_key: API 密钥
-        **kwargs: 其他参数
+        provider: API provider
+        model: Model name
+        api_key: API key
+        base_url: API base URL
+        **kwargs: Other parameters
 
     Returns:
-        LLMClient 实例
+        LLMClient instance
     """
-    # 从 config 读取默认配置
+    # Read default config from config.py
     import sys
 
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-    from config import LLM_CONFIG
+    from config import LLM_CONFIG, DEEPSEEK_API_KEY
 
     provider = provider or LLM_CONFIG["provider"]
     model = model or LLM_CONFIG["model"]
+    base_url = base_url or LLM_CONFIG.get("base_url")
 
+    # Use DEEPSEEK_API_KEY from config if not provided
+    if provider == "deepseek" and not api_key:
+        api_key = DEEPSEEK_API_KEY
+
+    # Merge configs, but remove keys that are already passed as explicit arguments
     config = {**LLM_CONFIG, **kwargs}
+    # Remove keys that will be passed explicitly to avoid duplicate keyword arguments
+    for key in ["provider", "model", "api_key", "base_url"]:
+        config.pop(key, None)
 
-    return LLMClient(provider=provider, model=model, api_key=api_key, **config)
+    return LLMClient(
+        provider=provider, model=model, api_key=api_key, base_url=base_url, **config
+    )
 
 
 if __name__ == "__main__":
-    # 测试
+    # Test
     client = create_llm_client()
 
     messages = [

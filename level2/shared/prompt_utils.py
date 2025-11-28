@@ -32,7 +32,12 @@ def format_prompt(template: str, **kwargs) -> str:
     Returns:
         格式化后的提示词
     """
-    return template.format(**kwargs)
+    # Use safe string replacement instead of format() to avoid issues
+    # with JSON examples containing curly braces
+    result = template
+    for key, value in kwargs.items():
+        result = result.replace("{" + key + "}", str(value))
+    return result
 
 
 def create_messages(
