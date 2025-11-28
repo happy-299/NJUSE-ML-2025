@@ -120,6 +120,47 @@
   - 通过检索增强上下文，任务三（评审意见）在语义相关性上可能提升（例如BERTScore）。
   - 对任务四（代码修复），若引入执行反馈与语法/静态分析循环，有望提升可执行性与功能等效性（即便精确匹配仍难）。
 
+### Level 3 实验量化结果（汇总）
+- 数据来源：`outputs/level3/all/comprehensive_metrics_test.json`（聚合指标）以及 `outputs/level3/all/summary_results_test.json`（样本明细）和 `outputs/level3/all/detailed_results_test.json`（逐样本详表）。
+
+- **任务一（代码质量评估）**：
+  - Accuracy: 0.40
+  - Precision: 0.20
+  - Recall: 0.50
+  - F1 (Macro): 0.2857
+  - 类别分布与支持度：Class 0 support=6，Class 1 support=4；Class 1 的召回较高但整体样本少，结果受样本数影响较大。
+
+- **任务二（问题定位）**：
+  - 评估结果中返回错误："No valid samples for code refinement evaluation"，说明当前测试集中无可用于该子任务的有效标注样本或评估脚本未匹配到有效样本，需补充定位标注或调整评估协议。
+
+- **任务三（评审意见生成）**：
+  - total_samples: 10；generated_reviews: 10；generation_rate: 100%
+  - 平均评审长度 (avg_review_length): 33.4 tokens
+  - 说明：此处仅统计生成情况（无 ground truth），从语义与长度上看模型能产生合理大小的评审意见。
+
+- **任务四（代码修复）**：
+  - total_samples: 10；generated_fixes: 8；generation_rate: 80%
+  - verified_fixes: 0；verification_rate: 0.0%
+  - 平均修复代码长度 (avg_fixed_length): 19688.4 字符（或token长度，视生成格式而定）
+  - avg_retry_count: 0.0
+  - 说明：模型能在多数样本上生成修复候选（8/10），但自动验证（或人工/自动验证流程）未通过；需引入执行/静态验证闭环或更严格的后处理来提高可验证修复率。
+
+- **总体统计**：
+  - total_samples: 10，dataset=`quality`，split=`test`，timestamp见聚合文件中记录。
+
+### 初步结论（基于 Level 3 数据）
+- 任务一：微调/判别类模型在该小规模测试集上仍存在明显假阳性/假阴性问题（F1 较低），但对需要人工评审的类（Class 1）召回较高，适合用作高召回的候选筛选器。
+- 任务二：当前评估无法给出有效量化指标，需补齐标注或修正评估脚本以验证定位能力。
+- 任务三：生成能力稳定（生成率100%），但缺少 ground truth 使得质量评估受限；建议增加人工标注或使用语义相似度/人类评估。
+- 任务四：生成覆盖率尚好但验证失败率高；下一步应优先建立验证（单元/语法/静态分析/合成执行）管道，并尝试更强模型或分阶段修复策略。
+
+### 推荐的后续工作
+- 补充用于任务二的定位标注或改进评估脚本，确保问题定位可量化。
+- 为任务三引入人工或半自动评分（例如 BERTScore+人工抽样）以评估生成质量。
+- 为任务四建立可执行性验证流水线（语法检查、简单测试用例或静态分析），并在生成后做二次修正与重试策略。
+
+---
+
 ---
 
 ## 总结与建议
