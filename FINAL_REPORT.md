@@ -114,13 +114,8 @@
   6. 入口与状态管理：`level3/agent/main.py`、`level3/agent/state.py`
 - 说明：上述Agent架构支持将四个任务整合到一个多步推理与工具链调用的管线中；可扩展接入GraphRAG以构建代码知识图、进行上下文检索与证据汇聚，提升多文件场景下的理解与定位能力。
 
-### 结果与分析
-- 性能对比与改进效果：基于Level 1/2的经验，Agent与GraphRAG的潜在改进点包括：
-  - 多步计划与工具调用可提升任务二（定位）的结构化准确性。
-  - 通过检索增强上下文，任务三（评审意见）在语义相关性上可能提升（例如BERTScore）。
-  - 对任务四（代码修复），若引入执行反馈与语法/静态分析循环，有望提升可执行性与功能等效性（即便精确匹配仍难）。
 
-### Level 3 实验量化结果（汇总）
+### Level 3 结果与分析
 - 数据来源：`outputs/level3/all/comprehensive_metrics_test.json`（聚合指标）以及 `outputs/level3/all/summary_results_test.json`（样本明细）和 `outputs/level3/all/detailed_results_test.json`（逐样本详表）。
 
 - **任务一（代码质量评估）**：
@@ -148,7 +143,7 @@
 - **总体统计**：
   - total_samples: 10，dataset=`quality`，split=`test`，timestamp见聚合文件中记录。
 
-### 初步结论（基于 Level 3 数据）
+### 初步结论
 - 任务一：微调/判别类模型在该小规模测试集上仍存在明显假阳性/假阴性问题（F1 较低），但对需要人工评审的类（Class 1）召回较高，适合用作高召回的候选筛选器。
 - 任务二：当前评估无法给出有效量化指标，需补齐标注或修正评估脚本以验证定位能力。
 - 任务三：生成能力稳定（生成率100%），但缺少 ground truth 使得质量评估受限；建议增加人工标注或使用语义相似度/人类评估。
