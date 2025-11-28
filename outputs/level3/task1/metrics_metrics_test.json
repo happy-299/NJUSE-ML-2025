@@ -1,0 +1,8 @@
+{
+  "accuracy": 0.0,
+  "precision": 0.0,
+  "recall": 0.0,
+  "f1_macro": 0.0,
+  "sample_count": 2,
+  "task": "任务一：代码质量评估（评审必要性预测）"
+}

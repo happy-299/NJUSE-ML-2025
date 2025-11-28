@@ -1,0 +1,20 @@
+[
+  {
+    "idx": 0,
+    "sample_id": 1,
+    "prediction": 1,
+    "confidence": 0.0,
+    "reasoning": "",
+    "ground_truth": 0,
+    "raw_response": ""
+  },
+  {
+    "idx": 1,
+    "sample_id": 2,
+    "prediction": 1,
+    "confidence": 0.0,
+    "reasoning": "",
+    "ground_truth": 0,
+    "raw_response": ""
+  }
+]

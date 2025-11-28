@@ -1,0 +1,7 @@
+{
+  "total_samples": 2,
+  "generated_reviews": 2,
+  "avg_review_length": 31.0,
+  "generation_rate": 100.0,
+  "task": "任务三：评审意见生成（统计）"
+}

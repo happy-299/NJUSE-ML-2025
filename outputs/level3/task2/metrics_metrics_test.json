@@ -1,0 +1,11 @@
+{
+  "exact_match": 0.0,
+  "partial_match": 0.0,
+  "mean_iou": 0.0,
+  "mrr": 0.0,
+  "top_1_accuracy": 0.0,
+  "top_3_accuracy": 0.0,
+  "top_5_accuracy": 0.0,
+  "sample_count": 2,
+  "task": "任务二：问题代码定位"
+}

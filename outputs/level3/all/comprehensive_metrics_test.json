@@ -1,0 +1,50 @@
+{
+  "task1_quality_assessment": {
+    "accuracy": 0.4,
+    "precision": 0.2,
+    "recall": 0.5,
+    "f1": 0.28571428571428575,
+    "class_metrics": {
+      "0": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 6
+      },
+      "1": {
+        "precision": 0.4,
+        "recall": 1.0,
+        "f1": 0.5714285714285715,
+        "support": 4
+      }
+    }
+  },
+  "task2_problem_localization": {
+    "error": "No valid samples for code refinement evaluation"
+  },
+  "task3_review_generation": {
+    "total_samples": 10,
+    "generated_reviews": 10,
+    "avg_review_length": 33.4,
+    "generation_rate": 100.0,
+    "note": "无 ground truth，仅统计生成情况",
+    "task": "任务三：评审意见生成（统计）"
+  },
+  "task4_code_fixing": {
+    "total_samples": 10,
+    "generated_fixes": 8,
+    "verified_fixes": 0,
+    "avg_fixed_length": 19688.4,
+    "generation_rate": 80.0,
+    "verification_rate": 0.0,
+    "avg_retry_count": 0.0,
+    "note": "无 ground truth，仅统计生成情况",
+    "task": "任务四：代码修复（统计）"
+  },
+  "overall_statistics": {
+    "total_samples": 10,
+    "dataset": "quality",
+    "split": "test",
+    "timestamp": "2025-11-27T10:56:12.703196"
+  }
+}

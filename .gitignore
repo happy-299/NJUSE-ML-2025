@@ -60,6 +60,9 @@ outputs/**/*.json
 outputs/**/*.csv
 outputs/**/*.txt
 
+# 但保留 level3 的输出结果
+!outputs/level3/**
+
 # 但保留 .gitkeep
 !**/.gitkeep
 

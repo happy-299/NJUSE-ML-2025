@@ -1,0 +1,22 @@
+{
+  "timestamp": "2025-11-27T09:38:42.423740",
+  "task": "quality",
+  "accuracy": 0.0,
+  "precision": 0.0,
+  "recall": 0.0,
+  "f1": 0.0,
+  "class_metrics": {
+    "0": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 2
+    },
+    "1": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 0
+    }
+  }
+}

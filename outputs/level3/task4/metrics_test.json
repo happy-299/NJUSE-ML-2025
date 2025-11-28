@@ -1,0 +1,12 @@
+{
+  "timestamp": "2025-11-27T10:56:12.701554",
+  "task": "任务四：代码修复（统计）",
+  "total_samples": 10,
+  "generated_fixes": 8,
+  "verified_fixes": 0,
+  "avg_fixed_length": 19688.4,
+  "generation_rate": 80.0,
+  "verification_rate": 0.0,
+  "avg_retry_count": 0.0,
+  "note": "无 ground truth，仅统计生成情况"
+}
