@@ -1,0 +1,2 @@
+def replace_string(original_string, old_substring, new_substring):
+    return original_string.replace(old_substring, new_substring)

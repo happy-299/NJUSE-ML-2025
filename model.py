@@ -3,10 +3,13 @@ import json
 from tqdm import tqdm
 import re
 import os
-openai.api_key = "your_key"
+
+# API配置 - 使用原生OpenAI格式的中转API
+openai.api_key = ""
+openai.api_base = ""  # 根据你的API文档，使用/v1路径
 
 
-def get_completion(prompt, model="gpt-3.5-turbo"):
+def get_completion(prompt, model="claude-3-5-sonnet-20241022"):
     messages = [{"role": "user", "content": prompt}]
     response = openai.ChatCompletion.create(
         model=model,
@@ -99,6 +102,11 @@ if __name__ == '__main__':
             answer_id = data['answer_id']
             code_snippet = code_snippets[0]
             i = 0
+            
+            # 断点续传: 检查文件是否已存在,跳过已生成的API
+            output_file = save_API_dir + f'Code2API{answer_id}.' + ('java' if language == 'java' else 'py')
+            if os.path.exists(output_file):
+                continue
 
             if answer_id == '573468':
                 # The answer post contains two code snippets,
